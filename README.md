@@ -178,3 +178,33 @@ uv run ruff format --check
 - `POST /` - Enqueue an ingestion job for all or selected project sources (requires `member`+)
 - `GET /` - List all ingestion jobs for project (requires `viewer`+)
 - `GET /{job_id}` - Get status, progress percentage, error, and timestamps (requires `viewer`+)
+
+### Knowledge & Verification (`/api/v1/projects/{project_id}/knowledge`)
+- `GET /` - List knowledge items with filters (`category`, `review_status`, `origin`, `min_confidence`, `max_confidence`, `verified`, search `q`) and pagination (requires `viewer`+)
+- `GET /{item_id}` - Get single knowledge item with loaded evidence, relational tasks, and dependency graph (requires `viewer`+)
+- `POST /{item_id}/review` - Review (approve, reject, edit) knowledge item with auditor identity & timestamp tracking (requires `reviewer`+)
+- `POST /bulk-review` - Bulk review status update across multiple items (requires `reviewer`+)
+- `GET /tasks` - List project tasks with status and owner filters (requires `viewer`+)
+- `GET /gaps` - List detected knowledge gaps (missing owners/dates, decisions lacking rationale, risks without mitigation, unverified evidence) (requires `viewer`+)
+- `GET /conflicts` - List detected conflicting decisions and opposing technical stances (requires `viewer`+)
+
+---
+
+## AI Knowledge Extraction & Evidence Verification
+
+1. **Gemini Integration (`app/integrations/gemini.py`)**:
+   - Async client using the official `google-genai` SDK with structured JSON output validated by Pydantic models.
+   - Configurable model (default `gemini-2.5-flash`), temperature (`0.1`), bounded concurrency semaphore, timeout, and exponential backoff retry.
+   - Versioned prompts in `app/prompts/` instructing the model to extract decisions, tasks, dependencies, risks, milestones, and insights without hallucinating.
+
+2. **Programmatic Evidence Verification (`app/services/evidence_verifier.py`)**:
+   - Every candidate insight extracted by the LLM is programmatically matched against its source chunk before being marked verified.
+   - Uses multi-stage fuzzy and normalized matching (exact substring, whitespace-normalized, case-insensitive, punctuation-scrubbed, sliding sequence matcher).
+   - Hallucinated or unverified excerpts are flagged `verified=False` and marked with `[UNVERIFIED_EVIDENCE]` for human review—never presented as verified facts.
+
+3. **Deduplication, Conflict Detection, and Gaps**:
+   - Near-duplicate items across chunks (similarity threshold >= 0.82) are merged into a canonical `KnowledgeItem`, appending new `Evidence` records rather than duplicating items.
+   - Conflicting decisions on the same topic are detected and flagged with `[CONFLICT_DETECTED]`.
+   - Tasks lacking owner/due date, decisions lacking rationale, and risks lacking mitigation plans are flagged as actionable knowledge gaps.
+   - Extraction is idempotent per chunk via `DocumentChunk.extraction_version`.
+

@@ -2,7 +2,18 @@ from app.schemas.common import ErrorDetail, ErrorResponse, HealthResponse
 from app.schemas.evidence import EvidenceCreate, EvidenceRead
 from app.schemas.handover import HandoverReportCreate, HandoverReportRead
 from app.schemas.ingestion import IngestionJobCreate, IngestionJobRead
-from app.schemas.knowledge import KnowledgeItemCreate, KnowledgeItemRead, KnowledgeItemReview
+from app.schemas.knowledge import (
+    BulkReviewRequest,
+    BulkReviewResponse,
+    ConflictItemRead,
+    DependencyRead,
+    GapItemRead,
+    KnowledgeItemCreate,
+    KnowledgeItemDetailRead,
+    KnowledgeItemRead,
+    KnowledgeItemReview,
+    KnowledgeItemReviewRequest,
+)
 from app.schemas.project import (
     ProjectCreate,
     ProjectDetailRead,
@@ -39,7 +50,14 @@ __all__ = [
     "ProjectMemberRead",
     "KnowledgeItemCreate",
     "KnowledgeItemRead",
+    "KnowledgeItemDetailRead",
     "KnowledgeItemReview",
+    "KnowledgeItemReviewRequest",
+    "BulkReviewRequest",
+    "BulkReviewResponse",
+    "GapItemRead",
+    "ConflictItemRead",
+    "DependencyRead",
     "EvidenceCreate",
     "EvidenceRead",
     "TaskCreate",

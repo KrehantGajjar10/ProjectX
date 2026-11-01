@@ -113,6 +113,11 @@ class DocumentChunk(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=True,
         index=True,
     )
+    extraction_version: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        index=True,
+    )
     location_info: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,

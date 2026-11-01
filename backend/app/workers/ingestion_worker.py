@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.models.enums import IngestionJobStatus
 from app.models.ingestion import IngestionJob
 from app.models.source import Source
+from app.services.extraction_service import ExtractionService, get_extraction_service
 from app.services.ingestion_service import IngestionService
 from app.services.storage import StorageBackend
 
@@ -37,6 +38,7 @@ class IngestionWorker:
         self,
         database_url: str | None = None,
         storage: StorageBackend | None = None,
+        extraction_service: ExtractionService | None = None,
     ) -> None:
         self.db_url = database_url or settings.async_database_url
         self.engine = create_async_engine(
@@ -50,6 +52,7 @@ class IngestionWorker:
             class_=AsyncSession,
         )
         self.ingestion_service = IngestionService(storage=storage)
+        self.extraction_service = extraction_service or get_extraction_service()
         self.is_running = True
 
     async def recover_stuck_jobs(self, session: AsyncSession) -> int:
@@ -181,13 +184,30 @@ class IngestionWorker:
                     )
                     all_stats.append(stats)
 
-                    # Update progress & heartbeat
+                    # Update progress & heartbeat (Stage 1: Document Ingestion & Chunking)
                     now = datetime.now(UTC)
                     job.heartbeat_at = now
-                    job.progress = 5 + int(((idx + 1) / total_sources) * 90)
+                    job.progress = 5 + int(((idx + 1) / total_sources) * 45)
                     await session.commit()
 
-                # 3. Mark completed
+                # Stage 2: AI Knowledge Extraction & Evidence Verification
+                logger.info("Job %s: running AI knowledge extraction stage", job_id)
+                job.progress = 52
+                job.heartbeat_at = datetime.now(UTC)
+                await session.commit()
+
+                async def _on_extraction_progress(pct: int) -> None:
+                    job.progress = 52 + int((pct / 50.0) * 43)
+                    job.heartbeat_at = datetime.now(UTC)
+                    await session.commit()
+
+                extraction_stats = await self.extraction_service.process_project_extraction(
+                    db=session,
+                    project_id=job.project_id,
+                    progress_callback=_on_extraction_progress,
+                )
+
+                # Stage 3: Mark completed
                 now = datetime.now(UTC)
                 job.status = IngestionJobStatus.COMPLETED
                 job.progress = 100
@@ -196,9 +216,14 @@ class IngestionWorker:
                 job.metadata_info = {
                     **job.metadata_info,
                     "summary": all_stats,
+                    "extraction": extraction_stats,
                 }
                 await session.commit()
-                logger.info("Successfully completed ingestion job %s", job_id)
+                logger.info(
+                    "Successfully completed ingestion job %s with extraction stats: %s",
+                    job_id,
+                    extraction_stats,
+                )
 
             except Exception as exc:
                 await session.rollback()
