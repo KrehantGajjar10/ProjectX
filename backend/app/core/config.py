@@ -57,6 +57,26 @@ class Settings(BaseSettings):
     # GitHub
     GITHUB_ACCESS_TOKEN: str | None = None
 
+    # Storage & Uploads
+    STORAGE_DIR: str = "data/storage"
+    MAX_UPLOAD_SIZE_BYTES: int = 25 * 1024 * 1024  # 25 MB
+    ALLOWED_UPLOAD_EXTENSIONS: list[str] = [
+        ".pdf",
+        ".md",
+        ".markdown",
+        ".docx",
+        ".pptx",
+        ".txt",
+    ]
+
+    # Ingestion & Chunking
+    CHUNK_SIZE_TOKENS: int = 800
+    CHUNK_OVERLAP_TOKENS: int = 150
+    INGESTION_WORKER_POLL_INTERVAL_SECONDS: float = 2.0
+    INGESTION_STUCK_TIMEOUT_SECONDS: int = 900  # 15 minutes
+    GITHUB_MAX_FILE_SIZE_BYTES: int = 1024 * 1024  # 1 MB
+    GITHUB_MAX_FILES: int = 500
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Any) -> list[str]:

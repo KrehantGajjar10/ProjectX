@@ -1,6 +1,7 @@
 from app.schemas.common import ErrorDetail, ErrorResponse, HealthResponse
 from app.schemas.evidence import EvidenceCreate, EvidenceRead
 from app.schemas.handover import HandoverReportCreate, HandoverReportRead
+from app.schemas.ingestion import IngestionJobCreate, IngestionJobRead
 from app.schemas.knowledge import KnowledgeItemCreate, KnowledgeItemRead, KnowledgeItemReview
 from app.schemas.project import (
     ProjectCreate,
@@ -10,6 +11,12 @@ from app.schemas.project import (
     ProjectMemberUpdate,
     ProjectRead,
     ProjectUpdate,
+)
+from app.schemas.source import (
+    GitHubSourceCreate,
+    SourceRead,
+    UploadFileDetail,
+    UploadSourceResponse,
 )
 from app.schemas.task import TaskCreate, TaskRead
 from app.schemas.user import Token, TokenPayload, UserCreate, UserLogin, UserRead
@@ -39,4 +46,10 @@ __all__ = [
     "TaskRead",
     "HandoverReportCreate",
     "HandoverReportRead",
+    "GitHubSourceCreate",
+    "SourceRead",
+    "UploadFileDetail",
+    "UploadSourceResponse",
+    "IngestionJobCreate",
+    "IngestionJobRead",
 ]
