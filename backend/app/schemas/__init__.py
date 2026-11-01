@@ -23,6 +23,15 @@ from app.schemas.project import (
     ProjectRead,
     ProjectUpdate,
 )
+from app.schemas.search import (
+    ChatMessage,
+    CitationRead,
+    QARequest,
+    QAResponse,
+    ReindexResponse,
+    SearchResultItem,
+    SearchResultsResponse,
+)
 from app.schemas.source import (
     GitHubSourceCreate,
     SourceRead,
@@ -70,4 +79,11 @@ __all__ = [
     "UploadSourceResponse",
     "IngestionJobCreate",
     "IngestionJobRead",
+    "ChatMessage",
+    "CitationRead",
+    "QARequest",
+    "QAResponse",
+    "SearchResultItem",
+    "SearchResultsResponse",
+    "ReindexResponse",
 ]

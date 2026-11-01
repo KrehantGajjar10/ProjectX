@@ -3,9 +3,11 @@ from app.services import (
     chunking_service,
     evidence_verifier,
     extraction_service,
+    indexing_service,
     ingestion_service,
     knowledge_service,
     project_service,
+    retrieval_service,
     source_service,
     storage,
 )
@@ -20,4 +22,6 @@ __all__ = [
     "extraction_service",
     "evidence_verifier",
     "storage",
+    "indexing_service",
+    "retrieval_service",
 ]

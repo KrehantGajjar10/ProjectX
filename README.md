@@ -188,6 +188,11 @@ uv run ruff format --check
 - `GET /gaps` - List detected knowledge gaps (missing owners/dates, decisions lacking rationale, risks without mitigation, unverified evidence) (requires `viewer`+)
 - `GET /conflicts` - List detected conflicting decisions and opposing technical stances (requires `viewer`+)
 
+### Semantic Search & Contextual Q&A (`/api/v1/projects/{project_id}`)
+- `POST /search` - Contextual Q&A (default) or plain ranked search (`include_answer=false`) (requires `viewer`+)
+- `GET /search` - Plain search box endpoint returning ranked evidence-linked results (requires `viewer`+)
+- `POST /reindex` - Reindex all chunks and curated knowledge items into Qdrant (requires `admin`+)
+
 ---
 
 ## AI Knowledge Extraction & Evidence Verification
@@ -207,4 +212,28 @@ uv run ruff format --check
    - Conflicting decisions on the same topic are detected and flagged with `[CONFLICT_DETECTED]`.
    - Tasks lacking owner/due date, decisions lacking rationale, and risks lacking mitigation plans are flagged as actionable knowledge gaps.
    - Extraction is idempotent per chunk via `DocumentChunk.extraction_version`.
+
+---
+
+## Semantic Retrieval & Contextual Q&A
+
+1. **Qdrant Vector Index (`app/integrations/qdrant.py`)**:
+   - Single collection design (`projectx_knowledge`) with mandatory `project_id` filtering on all searches to ensure strict multi-tenant isolation.
+   - Payload field indexes for fast filtered lookups on `project_id`, `document_id`, `chunk_id`, `source_id`, `category`, `entity_type`, and `verified`.
+   - Stored model and dimension metadata; collection rejects or triggers reindexing if model or dimension configuration changes.
+
+2. **Gemini Embeddings**:
+   - Embeddings powered by the official Google GenAI model `text-embedding-004` (configurable dimension 768).
+   - Generates embeddings for document chunks (`RETRIEVAL_DOCUMENT`) and curated knowledge items, with batched and concurrency-controlled calls.
+
+3. **Hybrid Retrieval (`app/services/retrieval_service.py`)**:
+   - Combines Qdrant dense vector search with PostgreSQL full-text keyword search (`to_tsvector` and `plainto_tsquery`).
+   - Merges results via Reciprocal Rank Fusion (RRF) with a boost for approved curated knowledge items.
+   - Automatic fallback to PostgreSQL keyword search if Qdrant or embedding services are unavailable, indicated via `retrieval_mode="keyword_fallback"`.
+
+4. **Contextual Q&A with Citation Verification**:
+   - Answers questions strictly using retrieved context chunks and curated items.
+   - Programmatically verifies cited excerpts against source chunk text before returning them.
+   - Rejects out-of-domain questions with `is_sufficient=false` and `confidence=0.0` without hallucinating.
+
 

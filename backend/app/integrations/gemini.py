@@ -13,7 +13,12 @@ from app.prompts.extraction_v1 import (
     EXTRACTION_SYSTEM_INSTRUCTION_V1,
     EXTRACTION_USER_TEMPLATE_V1,
 )
+from app.prompts.qa_v1 import (
+    QA_SYSTEM_INSTRUCTION_V1,
+    QA_USER_TEMPLATE_V1,
+)
 from app.schemas.extraction import ExtractionResult
+from app.schemas.search import GroundedQAResult
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +35,8 @@ class GeminiClient:
         self,
         api_key: str | None = None,
         model_name: str | None = None,
+        embedding_model: str | None = None,
+        embedding_dimension: int | None = None,
         temperature: float | None = None,
         timeout: float | None = None,
         max_retries: int | None = None,
@@ -37,6 +44,8 @@ class GeminiClient:
     ) -> None:
         self.api_key = api_key or settings.GEMINI_API_KEY
         self.model_name = model_name or settings.GEMINI_MODEL
+        self.embedding_model = embedding_model or settings.GEMINI_EMBEDDING_MODEL
+        self.embedding_dimension = embedding_dimension or settings.GEMINI_EMBEDDING_DIMENSION
         self.temperature = temperature if temperature is not None else settings.GEMINI_TEMPERATURE
         self.timeout = timeout if timeout is not None else settings.GEMINI_TIMEOUT_SECONDS
         self.max_retries = max_retries if max_retries is not None else settings.GEMINI_MAX_RETRIES
@@ -83,31 +92,26 @@ class GeminiClient:
             last_err: Exception | None = None
             for attempt in range(self.max_retries + 1):
                 try:
-                    response = await asyncio.wait_for(
-                        self.client.aio.models.generate_content(
+                    async with asyncio.timeout(self.timeout):
+                        response = await self.client.aio.models.generate_content(
                             model=self.model_name,
                             contents=prompt,
                             config=config,
-                        ),
-                        timeout=self.timeout,
-                    )
+                        )
 
-                    text_content = response.text or ""
-                    if not text_content:
+                    text_res = response.text
+                    if not text_res:
                         return ExtractionResult(items=[])
 
                     try:
-                        parsed_json = json.loads(text_content)
-                        return ExtractionResult.model_validate(parsed_json)
+                        return ExtractionResult.model_validate_json(text_res)
                     except Exception as parse_err:
-                        logger.warning(
-                            "Failed to parse structured response on attempt %d: %s. Response text: %s",
-                            attempt,
-                            parse_err,
-                            text_content[:200],
-                        )
-                        if attempt == self.max_retries:
-                            raise parse_err
+                        try:
+                            data = json.loads(text_res)
+                            return ExtractionResult.model_validate(data)
+                        except Exception:
+                            logger.error("Failed to parse Gemini JSON: %s", text_res[:200])
+                            raise parse_err from None
 
                 except (TimeoutError, APIError, ConnectionError) as exc:
                     last_err = exc
@@ -131,6 +135,141 @@ class GeminiClient:
             if last_err:
                 raise last_err
             return ExtractionResult(items=[])
+
+    async def embed_texts(
+        self,
+        texts: list[str],
+        task_type: str = "RETRIEVAL_DOCUMENT",
+    ) -> list[list[float]]:
+        """Generates embeddings for a batch of texts using the official Gemini embedding model."""
+        if not texts:
+            return []
+
+        clean_texts = [t.strip() if t.strip() else " " for t in texts]
+        batch_size = settings.EMBEDDING_BATCH_SIZE
+        all_embeddings: list[list[float]] = []
+
+        config = types.EmbedContentConfig(
+            task_type=task_type,
+            output_dimensionality=self.embedding_dimension,
+        )
+
+        for i in range(0, len(clean_texts), batch_size):
+            batch = clean_texts[i : i + batch_size]
+            async with self.semaphore:
+                last_err: Exception | None = None
+                for attempt in range(self.max_retries + 1):
+                    try:
+                        async with asyncio.timeout(self.timeout):
+                            response = await self.client.aio.models.embed_content(
+                                model=self.embedding_model,
+                                contents=batch,
+                                config=config,
+                            )
+
+                        for emb in response.embeddings:
+                            all_embeddings.append(list(emb.values))
+                        last_err = None
+                        break
+
+                    except (TimeoutError, APIError, ConnectionError) as exc:
+                        last_err = exc
+                        if attempt == self.max_retries:
+                            logger.error(
+                                "Gemini embedding failed after %d retries: %s",
+                                self.max_retries,
+                                exc,
+                            )
+                            raise
+
+                        backoff = (2**attempt) * 1.0 + random.uniform(0.1, 0.4)
+                        logger.warning(
+                            "Gemini embedding attempt %d failed (%s). Retrying in %.2fs...",
+                            attempt + 1,
+                            exc,
+                            backoff,
+                        )
+                        await asyncio.sleep(backoff)
+
+                if last_err:
+                    raise last_err
+
+        return all_embeddings
+
+    async def embed_query(self, query: str) -> list[float]:
+        """Generates embedding for a single query text using RETRIEVAL_QUERY task type."""
+        embeddings = await self.embed_texts([query], task_type="RETRIEVAL_QUERY")
+        if not embeddings:
+            return [0.0] * self.embedding_dimension
+        return embeddings[0]
+
+    async def answer_contextual_qa(
+        self,
+        question: str,
+        chunks_context: str,
+        knowledge_context: str,
+        history_context: str = "None",
+    ) -> GroundedQAResult:
+        """Answers a user question grounded exclusively in retrieved context."""
+        prompt = QA_USER_TEMPLATE_V1.format(
+            chunks_context=chunks_context or "No chunk context retrieved.",
+            knowledge_context=knowledge_context or "No curated knowledge items retrieved.",
+            history_context=history_context or "None",
+            question=question,
+        )
+
+        config = types.GenerateContentConfig(
+            system_instruction=QA_SYSTEM_INSTRUCTION_V1,
+            temperature=self.temperature,
+            response_mime_type="application/json",
+            response_schema=GroundedQAResult,
+        )
+
+        async with self.semaphore:
+            last_err: Exception | None = None
+            for attempt in range(self.max_retries + 1):
+                try:
+                    async with asyncio.timeout(self.timeout):
+                        response = await self.client.aio.models.generate_content(
+                            model=self.model_name,
+                            contents=prompt,
+                            config=config,
+                        )
+
+                    text_res = response.text
+                    if not text_res:
+                        return GroundedQAResult(
+                            answer="I do not have sufficient information in the provided context to answer this question.",
+                            is_sufficient=False,
+                            confidence=0.0,
+                        )
+
+                    try:
+                        return GroundedQAResult.model_validate_json(text_res)
+                    except Exception:
+                        data = json.loads(text_res)
+                        return GroundedQAResult.model_validate(data)
+
+                except (TimeoutError, APIError, ConnectionError) as exc:
+                    last_err = exc
+                    if attempt == self.max_retries:
+                        logger.error(
+                            "Gemini Q&A failed after %d retries: %s",
+                            self.max_retries,
+                            exc,
+                        )
+                        raise
+
+                    backoff = (2**attempt) * 1.5 + random.uniform(0.1, 0.5)
+                    await asyncio.sleep(backoff)
+
+            if last_err:
+                raise last_err
+            return GroundedQAResult(
+                answer="I do not have sufficient information in the provided context to answer this question.",
+                is_sufficient=False,
+                confidence=0.0,
+            )
 
 
 _global_gemini_client: GeminiClient | None = None

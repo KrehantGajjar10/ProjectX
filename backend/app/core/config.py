@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
     QDRANT_API_KEY: str | None = None
+    QDRANT_COLLECTION_NAME: str = "projectx_knowledge"
 
     # Neo4j (Optional)
     NEO4J_ENABLED: bool = False
@@ -60,6 +61,14 @@ class Settings(BaseSettings):
     GEMINI_CONCURRENCY_LIMIT: int = 5
     EXTRACTION_BATCH_SIZE: int = 5
     EXTRACTION_VERSION: str = "v1.0"
+
+    # Gemini Embeddings & Retrieval
+    GEMINI_EMBEDDING_MODEL: str = "text-embedding-004"
+    GEMINI_EMBEDDING_DIMENSION: int = 768
+    EMBEDDING_BATCH_SIZE: int = 20
+    EMBEDDING_CONCURRENCY_LIMIT: int = 5
+    RETRIEVAL_TOP_K: int = 10
+    RETRIEVAL_HYBRID_ALPHA: float = 0.5
 
     # GitHub
     GITHUB_ACCESS_TOKEN: str | None = None

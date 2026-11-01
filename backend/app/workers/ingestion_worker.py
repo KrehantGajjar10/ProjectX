@@ -14,6 +14,7 @@ from app.models.enums import IngestionJobStatus
 from app.models.ingestion import IngestionJob
 from app.models.source import Source
 from app.services.extraction_service import ExtractionService, get_extraction_service
+from app.services.indexing_service import IndexingService, get_indexing_service
 from app.services.ingestion_service import IngestionService
 from app.services.storage import StorageBackend
 
@@ -39,6 +40,7 @@ class IngestionWorker:
         database_url: str | None = None,
         storage: StorageBackend | None = None,
         extraction_service: ExtractionService | None = None,
+        indexing_service: IndexingService | None = None,
     ) -> None:
         self.db_url = database_url or settings.async_database_url
         self.engine = create_async_engine(
@@ -53,6 +55,7 @@ class IngestionWorker:
         )
         self.ingestion_service = IngestionService(storage=storage)
         self.extraction_service = extraction_service or get_extraction_service()
+        self.indexing_service = indexing_service or get_indexing_service()
         self.is_running = True
 
     async def recover_stuck_jobs(self, session: AsyncSession) -> int:
@@ -184,20 +187,20 @@ class IngestionWorker:
                     )
                     all_stats.append(stats)
 
-                    # Update progress & heartbeat (Stage 1: Document Ingestion & Chunking)
+                    # Update progress & heartbeat (Stage 1: Document Ingestion & Chunking: 5% -> 40%)
                     now = datetime.now(UTC)
                     job.heartbeat_at = now
-                    job.progress = 5 + int(((idx + 1) / total_sources) * 45)
+                    job.progress = 5 + int(((idx + 1) / total_sources) * 35)
                     await session.commit()
 
-                # Stage 2: AI Knowledge Extraction & Evidence Verification
+                # Stage 2: AI Knowledge Extraction & Evidence Verification (40% -> 70%)
                 logger.info("Job %s: running AI knowledge extraction stage", job_id)
-                job.progress = 52
+                job.progress = 42
                 job.heartbeat_at = datetime.now(UTC)
                 await session.commit()
 
                 async def _on_extraction_progress(pct: int) -> None:
-                    job.progress = 52 + int((pct / 50.0) * 43)
+                    job.progress = 42 + int((pct / 50.0) * 28)
                     job.heartbeat_at = datetime.now(UTC)
                     await session.commit()
 
@@ -207,7 +210,18 @@ class IngestionWorker:
                     progress_callback=_on_extraction_progress,
                 )
 
-                # Stage 3: Mark completed
+                # Stage 3: Semantic Indexing into Qdrant (70% -> 95%)
+                logger.info("Job %s: running semantic vector indexing into Qdrant", job_id)
+                job.progress = 72
+                job.heartbeat_at = datetime.now(UTC)
+                await session.commit()
+
+                indexing_stats = await self.indexing_service.index_project_content(
+                    db=session,
+                    project_id=job.project_id,
+                )
+
+                # Stage 4: Mark completed
                 now = datetime.now(UTC)
                 job.status = IngestionJobStatus.COMPLETED
                 job.progress = 100
@@ -217,12 +231,13 @@ class IngestionWorker:
                     **job.metadata_info,
                     "summary": all_stats,
                     "extraction": extraction_stats,
+                    "indexing": indexing_stats,
                 }
                 await session.commit()
                 logger.info(
-                    "Successfully completed ingestion job %s with extraction stats: %s",
+                    "Successfully completed ingestion job %s with indexing stats: %s",
                     job_id,
-                    extraction_stats,
+                    indexing_stats,
                 )
 
             except Exception as exc:
