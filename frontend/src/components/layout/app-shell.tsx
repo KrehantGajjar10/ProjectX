@@ -26,18 +26,32 @@ export function AppShell({
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [createModalOpen, setCreateModalOpen] = React.useState(false);
 
+  // Extract projectId from URL pathname if viewing a specific project: /app/projects/:projectId/...
+  const segments = pathname.split("/").filter(Boolean);
+  const pathProjectId =
+    segments[0] === "app" &&
+    segments[1] === "projects" &&
+    segments[2] &&
+    segments[2] !== "sources"
+      ? segments[2]
+      : undefined;
+
+  // Derive activeProjectId cleanly without triggering cascading renders:
+  // 1. Authoritative project from URL if on a project-specific route
+  // 2. Explicitly passed project ID (if provided)
+  // 3. First project in workspace list if available
   const activeProjectId =
+    pathProjectId ||
     currentProjectId ||
-    (pathname.startsWith("/app/projects/")
-      ? pathname.split("/")[3]
-      : undefined);
+    (projects.length > 0 ? projects[0].id : undefined);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground antialiased selection:bg-primary/25 selection:text-foreground">
       {/* Desktop Persistent Sidebar */}
       <AppSidebar
-        currentProjectId={activeProjectId}
+        activeProjectId={activeProjectId}
         projects={projects}
+        onOpenCreateProjectModal={() => setCreateModalOpen(true)}
         className="hidden lg:flex"
       />
 
@@ -62,9 +76,13 @@ export function AppShell({
             </div>
 
             <AppSidebar
-              currentProjectId={activeProjectId}
+              activeProjectId={activeProjectId}
               projects={projects}
               onNavigate={() => setMobileMenuOpen(false)}
+              onOpenCreateProjectModal={() => {
+                setMobileMenuOpen(false);
+                setCreateModalOpen(true);
+              }}
               className="w-full border-r-0"
             />
           </div>

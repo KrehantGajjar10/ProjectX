@@ -6,7 +6,7 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Container } from "@/components/landing/container";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Menu, X, ArrowUpRight, Compass } from "lucide-react";
+import { Menu, X, ArrowUpRight, ArrowRight, Compass } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Capabilities", href: "#capabilities" },
@@ -15,7 +15,11 @@ const NAV_ITEMS = [
   { label: "About", href: "#about" },
 ];
 
-export function Header() {
+interface HeaderProps {
+  isAuthenticated?: boolean;
+}
+
+export function Header({ isAuthenticated = false }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
@@ -25,8 +29,8 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/85 backdrop-blur-md transition-colors">
       <Container className="flex h-14 items-center justify-between">
         {/* Brand Logo & Name */}
-        <a
-          href="#"
+        <Link
+          href="/"
           className="group flex items-center gap-2.5 text-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
         >
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-xs tracking-tight shadow-xs transition-transform group-hover:scale-105">
@@ -40,7 +44,7 @@ export function Header() {
               </span>
             </span>
           </div>
-        </a>
+        </Link>
 
         {/* Desktop Navigation Links */}
         <nav
@@ -62,26 +66,41 @@ export function Header() {
         <div className="flex items-center gap-2 sm:gap-2.5">
           <ThemeToggle />
 
-          <Link
-            href="/login"
-            className={cn(
-              buttonVariants({ variant: "ghost", size: "sm" }),
-              "hidden sm:inline-flex text-xs font-medium"
-            )}
-          >
-            Sign In
-          </Link>
+          {isAuthenticated ? (
+            <Link
+              href="/app"
+              className={cn(
+                buttonVariants({ variant: "default", size: "sm" }),
+                "hidden sm:inline-flex text-xs font-semibold gap-1.5 shadow-2xs"
+              )}
+            >
+              Go to Dashboard
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className={cn(
+                  buttonVariants({ variant: "ghost", size: "sm" }),
+                  "hidden sm:inline-flex text-xs font-medium"
+                )}
+              >
+                Sign In
+              </Link>
 
-          <a
-            href="#workflow"
-            className={cn(
-              buttonVariants({ variant: "default", size: "sm" }),
-              "hidden sm:inline-flex gap-1.5 font-medium"
-            )}
-          >
-            Explore Workflow
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </a>
+              <a
+                href="#workflow"
+                className={cn(
+                  buttonVariants({ variant: "default", size: "sm" }),
+                  "hidden sm:inline-flex gap-1.5 font-medium"
+                )}
+              >
+                Explore Workflow
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </a>
+            </>
+          )}
 
           {/* Mobile Menu Button */}
           <button
@@ -119,27 +138,43 @@ export function Header() {
             </nav>
 
             <div className="pt-2 border-t border-border flex flex-col gap-2">
-              <Link
-                href="/login"
-                onClick={closeMobileMenu}
-                className={cn(
-                  buttonVariants({ variant: "outline", size: "sm" }),
-                  "w-full justify-center text-xs"
-                )}
-              >
-                Sign In
-              </Link>
-              <a
-                href="#workflow"
-                onClick={closeMobileMenu}
-                className={cn(
-                  buttonVariants({ variant: "default", size: "sm" }),
-                  "w-full justify-center gap-1.5"
-                )}
-              >
-                Explore Workflow
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </a>
+              {isAuthenticated ? (
+                <Link
+                  href="/app"
+                  onClick={closeMobileMenu}
+                  className={cn(
+                    buttonVariants({ variant: "default", size: "sm" }),
+                    "w-full justify-center text-xs gap-1.5 font-semibold"
+                  )}
+                >
+                  Go to Dashboard
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    onClick={closeMobileMenu}
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "sm" }),
+                      "w-full justify-center text-xs"
+                    )}
+                  >
+                    Sign In
+                  </Link>
+                  <a
+                    href="#workflow"
+                    onClick={closeMobileMenu}
+                    className={cn(
+                      buttonVariants({ variant: "default", size: "sm" }),
+                      "w-full justify-center gap-1.5"
+                    )}
+                  >
+                    Explore Workflow
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </a>
+                </>
+              )}
             </div>
           </Container>
         </div>

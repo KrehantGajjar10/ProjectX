@@ -23,25 +23,23 @@ import {
 } from "lucide-react";
 
 interface AppSidebarProps {
-  currentProjectId?: string;
+  activeProjectId?: string;
   projects?: ProjectRead[];
   onNavigate?: () => void;
+  onOpenCreateProjectModal?: () => void;
   className?: string;
 }
 
 export function AppSidebar({
-  currentProjectId,
+  activeProjectId,
+  projects = [],
   onNavigate,
+  onOpenCreateProjectModal,
   className,
 }: AppSidebarProps) {
   const pathname = usePathname();
 
-  // Active project ID either from prop or parsed from pathname
-  const activeProjectId =
-    currentProjectId ||
-    (pathname.startsWith("/app/projects/")
-      ? pathname.split("/")[3]
-      : undefined);
+  const hasProjects = projects.length > 0;
 
   const navItems = [
     {
@@ -50,10 +48,11 @@ export function AppSidebar({
         {
           label: "Overview",
           icon: BarChart3,
-          href: activeProjectId ? `/app/projects/${activeProjectId}` : "/app",
-          isActive:
+          href: activeProjectId ? `/app/projects/${activeProjectId}` : "/app/projects",
+          isActive: Boolean(
             pathname === "/app" ||
-            (activeProjectId && pathname === `/app/projects/${activeProjectId}`),
+              (activeProjectId && pathname === `/app/projects/${activeProjectId}`)
+          ),
           isAvailable: true,
         },
         {
@@ -71,9 +70,16 @@ export function AppSidebar({
         {
           label: "Sources",
           icon: GitBranch,
-          href: "#",
-          isActive: false,
-          isAvailable: false,
+          href: activeProjectId
+            ? `/app/projects/${activeProjectId}/sources`
+            : undefined,
+          onClick: !activeProjectId ? onOpenCreateProjectModal : undefined,
+          isActive: Boolean(
+            activeProjectId &&
+              pathname === `/app/projects/${activeProjectId}/sources`
+          ),
+          isAvailable: true,
+          badge: !hasProjects ? "New" : undefined,
         },
         {
           label: "Knowledge",
@@ -205,32 +211,59 @@ export function AppSidebar({
                   );
                 }
 
+                if (item.href) {
+                  return (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      onClick={onNavigate}
+                      className={cn(
+                        "flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        item.isActive
+                          ? "bg-primary/10 text-primary font-semibold"
+                          : "text-muted-foreground hover:bg-surface hover:text-foreground"
+                      )}
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <Icon
+                          className={cn(
+                            "h-4 w-4 shrink-0",
+                            item.isActive
+                              ? "text-primary"
+                              : "text-muted-foreground"
+                          )}
+                        />
+                        <span>{item.label}</span>
+                      </span>
+
+                      {item.isActive && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      )}
+                    </Link>
+                  );
+                }
+
+                // If no href (e.g. no projects exist yet, trigger action)
                 return (
-                  <Link
+                  <button
                     key={item.label}
-                    href={item.href}
-                    onClick={onNavigate}
-                    className={cn(
-                      "flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      item.isActive
-                        ? "bg-primary/10 text-primary font-semibold"
-                        : "text-muted-foreground hover:bg-surface hover:text-foreground"
-                    )}
+                    type="button"
+                    onClick={() => {
+                      onNavigate?.();
+                      item.onClick?.();
+                    }}
+                    className="w-full flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors text-muted-foreground hover:bg-surface hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="flex items-center gap-2.5">
-                      <Icon
-                        className={cn(
-                          "h-4 w-4 shrink-0",
-                          item.isActive ? "text-primary" : "text-muted-foreground"
-                        )}
-                      />
+                      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span>{item.label}</span>
                     </span>
-
-                    {item.isActive && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    {item.badge && (
+                      <span className="text-[10px] font-mono text-primary bg-primary/10 px-1.5 py-0.2 rounded border border-primary/20">
+                        {item.badge}
+                      </span>
                     )}
-                  </Link>
+                  </button>
                 );
               })}
             </nav>
