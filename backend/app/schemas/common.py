@@ -17,5 +17,7 @@ class HealthResponse(BaseModel):
     status: str
     environment: str
     database: str
+    qdrant: dict[str, Any] | None = None
     neo4j: dict[str, Any] | None = None
+    demo_mode: bool = False
     version: str = "0.1.0"

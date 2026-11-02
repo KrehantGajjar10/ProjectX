@@ -1,135 +1,287 @@
 # ProjectX (Capture. Understand. Handover.)
 
-ProjectX is an AI-powered knowledge hub that turns scattered project knowledge into evidence-linked handover reports.
+**AI-powered knowledge hub that turns scattered engineering project knowledge into verifiable, evidence-linked handover reports.**
 
-This repository houses the modular backend service for ProjectX.
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
+[![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-336791.svg)](https://www.postgresql.org/)
+[![Qdrant](https://img.shields.io/badge/Qdrant-Vector_Index-DC2626.svg)](https://qdrant.tech/)
+[![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
 ---
 
-## Tech Stack
+## 1. Overview & Core Differentiator
+
+When senior engineers depart or projects shift teams, critical context is scattered across disparate GitHub repos, architectural notes, design decisions, and chat threads. Standard LLM summaries frequently hallucinate claims or lose provenance.
+
+**ProjectX solves this with strict evidence linking**:
+- **First-Class Evidence**: Every decision, task, risk, and handover narrative claim is linked to an exact verbatim excerpt, source locator (`file_path#L10-L20`), and document hash.
+- **Programmatic Verification**: AI extracts knowledge items with exact text excerpts. Before persisting, the backend programmatically verifies that the excerpt exists in the source chunk. If evidence cannot be verified, it is flagged as `[UNVERIFIED_EVIDENCE]`.
+- **Hybrid Retrieval**: Combines dense semantic vector search in Qdrant with PostgreSQL full-text keyword search and Reciprocal Rank Fusion (RRF), strictly partitioned by tenant `project_id`.
+- **Actionable Continuation Plan**: Generates a 10-section structured handover report detailing completed work, blocked tasks, architectural decisions, single points of knowledge (SPOK), and prioritized next steps.
+- **Immutable Sign-Off**: Handover reports transition through review states; once marked `approved`, reports become immutable with cryptographic audit trails and multi-format exports (Markdown, PDF, DOCX).
+
+---
+
+## 2. Technology Stack
 
 - **Runtime & Language**: Python 3.12
-- **Framework**: FastAPI (async) with Uvicorn
-- **Package Manager**: [uv](https://docs.astral.sh/uv/)
-- **Database**: PostgreSQL 17 (async via SQLAlchemy 2.0 & asyncpg)
-- **Migrations**: Alembic (async template)
-- **Validation**: Pydantic v2 & `pydantic-settings`
+- **Web Framework**: FastAPI (fully asynchronous) with Uvicorn
+- **Package & Environment Manager**: [uv](https://docs.astral.sh/uv/) (Astral)
+- **Relational Database**: PostgreSQL 17 via SQLAlchemy 2.0 (async) & `asyncpg`
+- **Schema Migrations**: Alembic (asynchronous environment)
+- **Data Validation & Settings**: Pydantic v2 & `pydantic-settings`
 - **Security & Passwords**: Argon2id hashing via `pwdlib[argon2]`, JWT access tokens via `pyjwt[crypto]`
-- **Vector Store**: Qdrant (`qdrant-client` async)
+- **Vector Search Engine**: Qdrant (`qdrant-client` async)
 - **Graph Database**: Neo4j (optional, disabled by default behind compose profile)
-- **LLM**: Gemini via the official `google-genai` SDK
-- **HTTP Client**: HTTPX (async)
-- **Processors**: `pypdf`, `python-docx`, `python-pptx`, `tiktoken`
-- **Testing & Quality**: pytest, pytest-asyncio, respx, ruff
+- **LLM Integration**: Google Gemini via official `google-genai` SDK (`gemini-2.5-flash` & `text-embedding-004`)
+- **Document Processors**: `pypdf`, `python-docx`, `python-pptx`, `tiktoken`, `reportlab`
+- **Testing & Quality**: `pytest`, `pytest-asyncio`, `respx`, `ruff`
+- **Containerization**: Docker & Docker Compose v2
 
 ---
 
-## Architecture
+## 3. Architecture & Modular Monolith
 
-The backend follows a **modular monolith** architecture located in `backend/app/`:
+ProjectX is architected as a **modular monolith** with strict layer separation:
 
 ```
-backend/
-├── app/
-│   ├── core/          # App settings, Argon2/JWT security, exception handlers
-│   ├── db/            # Base models, async session factory, get_db dependency
-│   ├── models/        # SQLAlchemy 2.0 ORM entities (UUID PKs, timestamps, cascades)
-│   ├── schemas/       # Pydantic v2 schemas for validation and serialization
-│   ├── api/v1/        # Presentation layer: auth, projects, members, sources, ingestion, health
-│   ├── services/      # Business logic & DB transactions: chunking, ingestion, storage, projects
-│   ├── integrations/  # External APIs & Connectors (GitHub, Qdrant, Gemini, Neo4j)
-│   ├── processors/    # File processors: PDF, Markdown, DOCX, PPTX, plain text, Code (Python, TS/JS)
-│   └── workers/       # Standalone ingestion worker with row locking & stuck-job recovery
-├── alembic/           # Async database migration versions and environment
-├── tests/             # Pytest test suite running against a separate test DB
-├── AGENT_RULES.md     # Engineering guidelines and architectural rules
-├── pyproject.toml     # uv package definitions and tool configurations
-├── Dockerfile         # Production container build
-└── .env.example       # Sample environment configuration
+backend/app/
+├── core/          # Settings, Argon2/JWT security, Rate Limiter, RequestID, Structured Logging
+├── db/            # Base models, async connection pooling, session factory, get_db dependency
+├── models/        # SQLAlchemy 2.0 entities (UUID PKs, timezone-aware timestamps, foreign cascades)
+├── schemas/       # Pydantic v2 validation, serialization, and OpenAPI contracts
+├── api/v1/        # Presentation layer: auth, projects, sources, knowledge, graph, handover
+├── services/      # Business logic: ingestion, extraction, retrieval, graph, handover, export, audit
+├── integrations/  # External adapters: Gemini, Qdrant, GitHub, Neo4j, Demo AI mock
+├── processors/    # File processors: PDF, Markdown, DOCX, PPTX, plain text, Code (Python, TS/JS)
+└── workers/       # Standalone ingestion worker using PostgreSQL row locking (SKIP LOCKED)
+```
+
+### Architectural Pipeline
+
+```mermaid
+flowchart LR
+    A["1. Connect<br/>(GitHub & Uploads)"] --> B["2. Reconstruct<br/>(Processors & Chunks)"]
+    B --> C["3. Verify<br/>(Gemini Extraction & Evidence Check)"]
+    C --> D["4. Understand<br/>(Graph, Risks, Timeline, Hybrid Q&A)"]
+    D --> E["5. Handover<br/>(10-Section Report & Exports)"]
 ```
 
 ---
 
-## Quickstart
+## 4. Environment Variables Reference
 
-### 1. Prerequisites
-- Docker & Docker Compose v2
-- [uv](https://docs.astral.sh/uv/) (v0.5+)
-- Python 3.12
+Configure environment settings in `backend/.env` (see `backend/.env.example`):
 
-### 2. Configure Environment
-Copy the example environment file:
-```bash
-cp backend/.env.example backend/.env
-```
+| Variable | Default Value | Description |
+| :--- | :--- | :--- |
+| `PROJECT_NAME` | `"ProjectX Backend"` | Name displayed in OpenAPI documentation |
+| `ENVIRONMENT` | `"development"` | `development`, `staging`, or `production` |
+| `DEBUG` | `true` | Enables detailed error reporting and debug endpoints |
+| `DEMO_MODE` | `false` | Enables realistic canned offline AI responses without Gemini API spend |
+| `API_V1_STR` | `"/api/v1"` | URL prefix for v1 API routes |
+| `SECRET_KEY` | *(min 32 bytes hex)* | Secret used to sign JWT access tokens |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | JWT expiration duration (24 hours) |
+| `ALGORITHM` | `"HS256"` | JWT signing algorithm |
+| `POSTGRES_SERVER` | `"localhost"` | PostgreSQL server hostname |
+| `POSTGRES_PORT` | `5432` | PostgreSQL port |
+| `POSTGRES_USER` | `"projectx"` | PostgreSQL username |
+| `POSTGRES_PASSWORD` | `"projectx_secret"` | PostgreSQL password |
+| `POSTGRES_DB` | `"projectx"` | PostgreSQL database name |
+| `DATABASE_URL` | *(composite asyncpg)* | Primary asynchronous database connection string |
+| `TEST_DATABASE_URL` | *(composite test DB)* | Isolated test database connection string |
+| `DB_POOL_SIZE` | `20` | Database connection pool size |
+| `DB_MAX_OVERFLOW` | `10` | Maximum overflow connections allowed |
+| `DB_POOL_TIMEOUT_SECONDS` | `30.0` | Connection pool checkout timeout |
+| `DB_POOL_PRE_PING` | `true` | Validates connections before checkout (avoids stale sockets) |
+| `RATE_LIMIT_ENABLED` | `true` | Toggles in-memory request rate limiting |
+| `RATE_LIMIT_REQUESTS_PER_MINUTE` | `60` | Global rate limit per client IP |
+| `RATE_LIMIT_EXPENSIVE_PER_MINUTE`| `15` | Limit for expensive endpoints (`/search`, `/handover`, `/reindex`) |
+| `QDRANT_HOST` | `"localhost"` | Qdrant vector database hostname |
+| `QDRANT_PORT` | `6333` | Qdrant vector database HTTP port |
+| `QDRANT_COLLECTION_NAME` | `"projectx_knowledge"`| Qdrant collection name |
+| `GEMINI_API_KEY` | `""` | Official Google Gemini API key |
+| `GEMINI_MODEL` | `"gemini-2.5-flash"` | Gemini text generation and structured extraction model |
+| `GEMINI_EMBEDDING_MODEL` | `"text-embedding-004"`| Official Gemini text embedding model |
+| `GEMINI_EMBEDDING_DIMENSION` | `768` | Embedding dimensionality (768 for text-embedding-004) |
+| `GITHUB_ACCESS_TOKEN` | `""` | Default GitHub token fallback for repository ingestion |
+| `STORAGE_DIR` | `"data/storage"` | Directory for local file storage abstraction |
+| `MAX_UPLOAD_SIZE_BYTES` | `26214400` | Maximum file upload size (25 MB) |
+| `NEO4J_ENABLED` | `false` | Enables optional Neo4j graph mirroring (disabled by default) |
 
-### 3. Start Infrastructure Services
-Start PostgreSQL 17 and Qdrant in detached mode:
+---
+
+## 5. Quickstart & Installation
+
+### Option A: Single-Command Docker Compose (Recommended)
+
+Bring up the complete production-style environment in one command:
 ```bash
 docker compose up -d
 ```
-> Neo4j is optional and behind a compose profile. To run with Neo4j: `docker compose --profile neo4j up -d`.
+This automatically boots:
+1. **PostgreSQL 17** (with healthcheck)
+2. **Qdrant Vector DB** (with TCP readyz probe)
+3. **ProjectX API** (runs `alembic upgrade head` on start, serves on `:8000`)
+4. **ProjectX Background Worker** (polls ingestion jobs with row-level locks)
 
-### 4. Run Database Migrations
-Apply Alembic migrations:
+Access the services:
+- **API Health**: [http://localhost:8000/health](http://localhost:8000/health)
+- **Interactive Swagger UI**: [http://localhost:8000/api/v1/docs](http://localhost:8000/api/v1/docs)
+- **ReDoc Contract**: [http://localhost:8000/api/v1/redoc](http://localhost:8000/api/v1/redoc)
+
+---
+
+### Option B: Local Native Setup (with `uv`)
+
+#### 1. Prerequisites
+- Python 3.12
+- [uv](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- Docker (for PostgreSQL & Qdrant dependencies)
+
+#### 2. Start PostgreSQL & Qdrant
+```bash
+docker compose up -d postgres qdrant
+```
+
+#### 3. Install Dependencies
+```bash
+cd backend
+uv sync
+```
+
+#### 4. Run Alembic Migrations
 ```bash
 cd backend
 uv run alembic upgrade head
 ```
 
-### 5. Start the Backend API Server
+#### 5. Start the FastAPI API Server
 ```bash
 cd backend
 uv run uvicorn app.main:app --reload --port 8000
 ```
-Interactive API documentation:
-- **Swagger UI**: [http://localhost:8000/api/v1/docs](http://localhost:8000/api/v1/docs)
-- **ReDoc**: [http://localhost:8000/api/v1/redoc](http://localhost:8000/api/v1/redoc)
-- **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
 
-### 6. Run the Ingestion Worker
-
-The ingestion pipeline runs on a dedicated database-backed queue using PostgreSQL row-level locking (`SELECT ... FOR UPDATE SKIP LOCKED`), with automatic stuck-job recovery and retry limits.
-
-**Run locally with uv:**
+#### 6. Start the Ingestion Worker
+In a separate terminal:
 ```bash
 cd backend
 uv run python -m app.workers.ingestion_worker
 ```
 
-**Run via Docker Compose:**
+---
+
+## 6. Demo Seed Script (3-Second Setup)
+
+To instantly populate the database with a realistic demo user, project, synthetic sources, verified knowledge items, blocked tasks, and an approved Handover Report:
+
 ```bash
-docker compose up -d worker
+cd backend
+uv run python -m scripts.seed_demo
 ```
 
----
-
-## Ingestion Pipeline Details
-
-1. **Connectors**:
-   - `GitHubConnector`: Connects to GitHub repositories via async HTTPX. Fetches repo metadata, README, directory tree, code & doc files, recent commits, and issues/pull requests. Automatically skips lockfiles, binaries, `node_modules`, and vendor trees.
-   - `UploadConnector`: Connects to multipart uploaded files saved in storage abstraction.
-2. **Processors**:
-   - **PDF**: Page-aware text extraction preserving page numbers.
-   - **Markdown**: Heading-aware section segmentation preserving heading hierarchy (`#`, `##`, `###`) and line numbers.
-   - **DOCX**: Word paragraph and heading style extraction.
-   - **PPTX**: Slide-aware text extraction tracking slide numbers and shape text.
-   - **Code**: Symbol-boundary parser for Python (`def`, `async def`, `class`) and TypeScript/JavaScript (`function`, `class`, `interface`, `type`), with line-block fallbacks for other languages.
-   - **Plain Text**: Block and line-range aware extraction.
-3. **Chunking**:
-   - Prose chunked to ~800-1000 tokens with configurable overlap (`CHUNK_SIZE_TOKENS`, `CHUNK_OVERLAP_TOKENS`).
-   - Code chunked along symbol boundaries.
-   - Every chunk preserves `document_id`, `source_id`, `file_path`, and `page` or `line_start`/`line_end` range for precise evidence citation.
-4. **Idempotency**:
-   - Uses SHA-256 content hashes and source paths.
-   - Re-ingesting unchanged sources creates **zero duplicate documents or chunks**.
-   - Modified files are updated and re-chunked; removed files are marked as `removed`.
+### Pre-Seeded Credentials:
+- **User Email**: `demo@projectx.dev`
+- **Password**: `DemoUser123!`
+- **Project**: "Chronos Workflow Engine" (4 documents, 6 verified knowledge items, tasks, risks, and Handover Report v1).
 
 ---
 
-## Testing & Quality
+## 7. The 5-Step Demo Walkthrough
 
-Run the test suite against the isolated test database:
+### Step 1: Connect (Source Onboarding)
+Connect knowledge sources via GitHub or direct multi-format file uploads:
+```bash
+# Login
+TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demo@projectx.dev","password":"DemoUser123!"}' | jq -r .access_token)
+
+# Upload architecture document
+curl -X POST http://localhost:8000/api/v1/projects/<PROJECT_ID>/sources/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "files=@docs/ARCHITECTURE.md"
+```
+
+### Step 2: Reconstruct (Processing & Chunking)
+Enqueue a background ingestion job:
+```bash
+curl -X POST http://localhost:8000/api/v1/projects/<PROJECT_ID>/ingestion/jobs \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"source_ids":["<SOURCE_ID>"]}'
+```
+The ingestion worker handles file parsing (page-aware PDF, heading-aware Markdown, DOCX, PPTX, code), calculates SHA-256 hashes, generates line locators, and chunks tokens with overlap.
+
+### Step 3: Verify (AI Extraction & Evidence Verification)
+Knowledge items are categorized into `decision`, `task`, `risk`, `milestone`, and `insight`:
+- Each item has `exact_evidence_excerpt`.
+- The verifier programmatically verifies the excerpt against the raw chunk text.
+- Reviewers approve or reject items:
+```bash
+curl -X POST http://localhost:8000/api/v1/projects/<PROJECT_ID>/knowledge/<ITEM_ID>/review \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"review_status":"approved","review_note":"Verified by team lead."}'
+```
+
+### Step 4: Understand (Search, Graph, Risks, Timeline)
+- **Contextual Q&A**: Hybrid dense vector + keyword search returning verifiable inline citations:
+  ```bash
+  curl -X POST http://localhost:8000/api/v1/projects/<PROJECT_ID>/search \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"question":"Why did we choose PostgreSQL?","include_answer":true}'
+  ```
+- **Dependency Graph**: Cycle detection and blocked chains computed via PostgreSQL recursive CTEs:
+  ```bash
+  curl -X GET http://localhost:8000/api/v1/projects/<PROJECT_ID>/dependencies/graph \
+    -H "Authorization: Bearer $TOKEN"
+  ```
+- **Risk Analytics**: Combined extracted risks and computed signals (overdue tasks, single point of knowledge):
+  ```bash
+  curl -X GET http://localhost:8000/api/v1/projects/<PROJECT_ID>/risks \
+    -H "Authorization: Bearer $TOKEN"
+  ```
+
+### Step 5: Handover (Report Generation & Sign-Off)
+Generate an evidence-linked 10-section continuation plan:
+```bash
+curl -X POST http://localhost:8000/api/v1/projects/<PROJECT_ID>/handover \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"departing_member_name":"Dave Miller","focus_area":"Core Engine"}'
+```
+Approve the report to lock immutability:
+```bash
+curl -X POST http://localhost:8000/api/v1/projects/<PROJECT_ID>/handover/<REPORT_ID>/review \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"approve","comment":"Final sign-off by director."}'
+```
+Export to executive formats:
+- **Markdown**: `GET /api/v1/projects/<PROJECT_ID>/handover/<REPORT_ID>/export/markdown`
+- **PDF**: `GET /api/v1/projects/<PROJECT_ID>/handover/<REPORT_ID>/export/pdf`
+- **Word DOCX**: `GET /api/v1/projects/<PROJECT_ID>/handover/<REPORT_ID>/export/docx`
+
+---
+
+## 8. Mock-Friendly Demo Mode
+
+To develop or demo the frontend without setting up a Google Gemini API key:
+```bash
+# In backend/.env:
+DEMO_MODE=true
+```
+- When `DEMO_MODE=true`: The backend returns realistic synthetic AI responses for extraction, grounded Q&A, and handover generation. All demo outputs are explicitly prefixed with `[DEMO_MODE]`.
+- When `DEMO_MODE=false`: The backend strictly requires a valid `GEMINI_API_KEY` and raises clear errors on failure. It **never silently falls back** to mock data in real mode.
+
+---
+
+## 9. Running Tests & Code Quality
+
+Run the comprehensive test suite:
 ```bash
 cd backend
 uv run pytest
@@ -138,198 +290,29 @@ uv run pytest
 Run linter and formatting checks:
 ```bash
 cd backend
-uv run ruff check
-uv run ruff format --check
+uv run ruff check .
+uv run ruff format --check .
 ```
 
 ---
 
-## API Endpoints (v1)
+## 10. Operational Hardening & Robustness
 
-### Health
-- `GET /health` - Service health probe with PostgreSQL connectivity check
-- `GET /api/v1/health` - API v1 health probe
-
-### Authentication (`/api/v1/auth`)
-- `POST /register` - Register new user account (Argon2id password hashing)
-- `POST /login` - Authenticate with email/password and receive JWT access token
-- `GET /me` - Get current authenticated user profile
-
-### Projects & Access Control (`/api/v1/projects`)
-- `POST /` - Create project (caller becomes `owner`)
-- `GET /` - List all projects where current user has membership
-- `GET /{project_id}` - Get project details & members (requires `viewer`+)
-- `PATCH /{project_id}` - Update project name/description (requires `admin`+)
-- `DELETE /{project_id}` - Delete project (requires `owner`)
-
-### Project Members (`/api/v1/projects/{project_id}/members`)
-- `GET /` - List project members with roles (requires `viewer`+)
-- `POST /` - Add member by email with role (requires `admin`+)
-- `PATCH /{member_id}` - Update member role (requires `admin`+; `owner` for owner roles)
-- `DELETE /{member_id}` - Remove member from project (requires `admin`+; prevents removing sole owner)
-
-### Knowledge Sources (`/api/v1/projects/{project_id}/sources`)
-- `POST /github` - Connect a GitHub repo as knowledge source (requires `admin`+)
-- `POST /upload` - Multipart file upload (PDF, Markdown, DOCX, PPTX, text) (requires `member`+)
-- `GET /` - List connected sources for project (requires `viewer`+)
-- `DELETE /{source_id}` - Delete source and cascade remove associated documents (requires `admin`+)
-
-### Ingestion Jobs (`/api/v1/projects/{project_id}/ingestion/jobs`)
-- `POST /` - Enqueue an ingestion job for all or selected project sources (requires `member`+)
-- `GET /` - List all ingestion jobs for project (requires `viewer`+)
-- `GET /{job_id}` - Get status, progress percentage, error, and timestamps (requires `viewer`+)
-
-### Knowledge & Verification (`/api/v1/projects/{project_id}/knowledge`)
-- `GET /` - List knowledge items with filters (`category`, `review_status`, `origin`, `min_confidence`, `max_confidence`, `verified`, search `q`) and pagination (requires `viewer`+)
-- `GET /{item_id}` - Get single knowledge item with loaded evidence, relational tasks, and dependency graph (requires `viewer`+)
-- `POST /{item_id}/review` - Review (approve, reject, edit) knowledge item with auditor identity & timestamp tracking (requires `reviewer`+)
-- `POST /bulk-review` - Bulk review status update across multiple items (requires `reviewer`+)
-- `GET /gaps` - List detected knowledge gaps (missing owners/dates, decisions lacking rationale, risks without mitigation, unverified evidence) (requires `viewer`+)
-- `GET /conflicts` - List detected conflicting decisions and opposing technical stances (requires `viewer`+)
-
-### Task Tracking (`/api/v1/projects/{project_id}/tasks`)
-- `GET /` - List and filter tasks with rich filters (`status`, `is_completed`, `is_blocked`, `owner_id`, `due_before`, `due_after`, `priority`) and pagination (requires `viewer`+)
-- `GET /progress` - Task completion metrics (total, completed, in-progress, todo, blocked, cancelled, overdue, unassigned, completion percentage) (requires `viewer`+)
-- `PATCH /{task_id}` - Audited update of task status, owner, priority, due date, title, or description (requires `member`+)
-
-### Dependency Mapping & Graph Analysis (`/api/v1/projects/{project_id}/dependencies`)
-- `GET /graph` - Full project dependency graph returning nodes, edges, cycle detection findings, and blocked chains findings (requires `viewer`+)
-- `GET /subgraph/{node_id}` - Upstream and downstream subgraph for a specific node traversed up to depth $N$ via PostgreSQL recursive CTE (requires `viewer`+)
-- `POST /sync-neo4j` - Mirror approved knowledge items and dependencies into Neo4j when enabled (requires `admin`+)
-
-### Risk Detection (`/api/v1/projects/{project_id}/risks`)
-- `GET /` - Unified risk audit combining extracted risks with deterministic computed signals (overdue tasks, missing owners, unresolved conflicts, unverified grounding, stale tasks, SPOK) with severity breakdown and filters (requires `viewer`+)
-
-### Project Timeline (`/api/v1/projects/{project_id}/timeline`)
-- `GET /` - Chronological timeline feed combining milestones, decisions, commit history, and task status changes with date filters and pagination (requires `viewer`+)
-
-### Project Dashboard Summary (`/api/v1/projects/{project_id}/dashboard`)
-- `GET /` - Unified single-call dashboard payload aggregating project metadata, item categories, review statuses, open risk severities, task progress, last ingestion status, recent activity, and critical highlights (requires `viewer`+)
-
-### Semantic Search & Contextual Q&A (`/api/v1/projects/{project_id}`)
-- `POST /search` - Contextual Q&A (default) or plain ranked search (`include_answer=false`) (requires `viewer`+)
-- `GET /search` - Plain search box endpoint returning ranked evidence-linked results (requires `viewer`+)
-- `POST /reindex` - Reindex all chunks and curated knowledge items into Qdrant (requires `admin`+)
-
-### Handover & Continuation Planning (`/api/v1/projects/{project_id}/handover`)
-- `POST /` - Start handover generation as a background job (optional: `departing_member_name`, `focus_area`, `approved_only`) (requires `member`+)
-- `GET /` - Retrieve the latest handover report and active generation job status (requires `viewer`+)
-- `GET /versions` - List summary of all generated handover versions (requires `viewer`+)
-- `GET /versions/{version_or_id}` - Retrieve a specific version by version number or UUID (requires `viewer`+)
-- `GET /diff` - Compare two versions at a section level (`?v1=1&v2=2`) (requires `viewer`+)
-- `POST /{report_id}/submit` - Submit draft report for review (requires `member`+)
-- `POST /{report_id}/review` - Approve or reject report with audited feedback (requires `reviewer`+; approved reports become immutable)
-- `GET /{report_id}/export/markdown` - Download report as GitHub-Flavored Markdown with footnotes & evidence appendix (requires `viewer`+)
-- `GET /{report_id}/export/pdf` - Download report as formatted PDF with ReportLab (requires `viewer`+)
-- `GET /{report_id}/export/docx` - Download report as Microsoft Word (.docx) (requires `viewer`+)
-
-### Project Activity & Audit Feed (`/api/v1/projects/{project_id}/activity`)
-- `GET /` - Chronological audit log trail recording knowledge reviews, report approvals, role changes, and exports (requires `viewer`+)
+1. **Request ID Tracing**:
+   Every incoming request is assigned or preserves an `X-Request-ID` header, injected into all log records and response headers alongside latency `X-Process-Time-Ms`.
+2. **Sensitive Secret Masking**:
+   The logging pipeline includes regex-based filters that mask Bearer tokens, GitHub personal access tokens (`ghp_`), Gemini API keys (`AIza...`), and passwords.
+3. **Sliding-Window Rate Limiting**:
+   Protects expensive endpoints (`/search`, `/handover`, `/reindex`, `/ingestion/jobs`) with HTTP 429 and `Retry-After: 60` headers.
+4. **Upload Defense**:
+   Validates extensions against an allowlist, enforces size limits (25 MB), and sanitizes filenames against directory traversal (`../`).
+5. **Database Connection Pooling**:
+   Configured with `pool_size=20`, `max_overflow=10`, `pool_timeout=30.0`, and `pool_pre_ping=true`.
 
 ---
 
-## AI Knowledge Extraction & Evidence Verification
+## 11. Known Limitations & Future Scope
 
-1. **Gemini Integration (`app/integrations/gemini.py`)**:
-   - Async client using the official `google-genai` SDK with structured JSON output validated by Pydantic models.
-   - Configurable model (default `gemini-2.5-flash`), temperature (`0.1`), bounded concurrency semaphore, timeout, and exponential backoff retry.
-   - Versioned prompts in `app/prompts/` instructing the model to extract decisions, tasks, dependencies, risks, milestones, and insights without hallucinating.
-
-2. **Programmatic Evidence Verification (`app/services/evidence_verifier.py`)**:
-   - Every candidate insight extracted by the LLM is programmatically matched against its source chunk before being marked verified.
-   - Uses multi-stage fuzzy and normalized matching (exact substring, whitespace-normalized, case-insensitive, punctuation-scrubbed, sliding sequence matcher).
-   - Hallucinated or unverified excerpts are flagged `verified=False` and marked with `[UNVERIFIED_EVIDENCE]` for human review—never presented as verified facts.
-
-3. **Deduplication, Conflict Detection, and Gaps**:
-   - Near-duplicate items across chunks (similarity threshold >= 0.82) are merged into a canonical `KnowledgeItem`, appending new `Evidence` records rather than duplicating items.
-   - Conflicting decisions on the same topic are detected and flagged with `[CONFLICT_DETECTED]`.
-   - Tasks lacking owner/due date, decisions lacking rationale, and risks lacking mitigation plans are flagged as actionable knowledge gaps.
-   - Extraction is idempotent per chunk via `DocumentChunk.extraction_version`.
-
----
-
-## Semantic Retrieval & Contextual Q&A
-
-1. **Qdrant Vector Index (`app/integrations/qdrant.py`)**:
-   - Single collection design (`projectx_knowledge`) with mandatory `project_id` filtering on all searches to ensure strict multi-tenant isolation.
-   - Payload field indexes for fast filtered lookups on `project_id`, `document_id`, `chunk_id`, `source_id`, `category`, `entity_type`, and `verified`.
-   - Stored model and dimension metadata; collection rejects or triggers reindexing if model or dimension configuration changes.
-
-2. **Gemini Embeddings**:
-   - Embeddings powered by the official Google GenAI model `text-embedding-004` (configurable dimension 768).
-   - Generates embeddings for document chunks (`RETRIEVAL_DOCUMENT`) and curated knowledge items, with batched and concurrency-controlled calls.
-
-3. **Hybrid Retrieval (`app/services/retrieval_service.py`)**:
-   - Combines Qdrant dense vector search with PostgreSQL full-text keyword search (`to_tsvector` and `plainto_tsquery`).
-   - Merges results via Reciprocal Rank Fusion (RRF) with a boost for approved curated knowledge items.
-   - Automatic fallback to PostgreSQL keyword search if Qdrant or embedding services are unavailable, indicated via `retrieval_mode="keyword_fallback"`.
-
-4. **Contextual Q&A with Citation Verification**:
-   - Answers questions strictly using retrieved context chunks and curated items.
-   - Programmatically verifies cited excerpts against source chunk text before returning them.
-   - Rejects out-of-domain questions with `is_sufficient=false` and `confidence=0.0` without hallucinating.
-
----
-
-## Dependency Graph, Risks, Timeline & Task Tracking
-
-1. **Dependency Mapping & Graph Algorithms (`app/services/graph_service.py`)**:
-   - Traversal via **PostgreSQL recursive Common Table Expressions (CTE)** for upstream and downstream traversal up to depth $N$ without N+1 queries.
-   - **Circular Dependency Detection**: Depth-first search (DFS) with recursion stack cycle tracking; detects cycles and flags them with `critical` severity.
-   - **Blocked Chains Detection**: Identifies downstream items blocked by incomplete tasks, blocked tasks, or rejected architectural decisions with `high` severity.
-   - **Optional Neo4j Mirroring (`app/integrations/neo4j.py`, `app/services/neo4j_sync_service.py`)**: Behind `NEO4J_ENABLED=false` (off by default); mirrors approved items and relational edges when enabled. The backend functions 100% identically without Neo4j.
-
-2. **Deterministic Risk Detection (`app/services/risk_service.py`)**:
-   - Combines AI-extracted risks with deterministic relational signals:
-     - **Overdue Tasks**: Non-completed tasks past their due date (`critical` if >= 7 days, `high` otherwise).
-     - **Unassigned Tasks**: Incomplete tasks without designated owners (`medium` / `high` if due within 3 days).
-     - **Stale Tasks**: Tasks inactive with no status changes for > 14 days (`medium`).
-     - **Unresolved Conflicts**: Items flagged with contradictory architectural stances (`high`).
-     - **Unverified Grounding**: Items with unverified evidence excerpts or low model confidence (< 0.70).
-     - **Single Point of Knowledge (SPOK)**: Repositories where > 85% of analyzed commits belong to a single author (`high` bus factor).
-   - Every risk includes severity rating, deterministic rationale, and supporting evidence links.
-
-3. **Project Timeline (`app/services/timeline_service.py`)**:
-   - Aggregates milestones, key decisions, task lifecycle transitions, and source commit histories.
-   - Sorted in reverse chronological order with date range filters (`start_date`, `end_date`), event type filtering, and pagination.
-
-4. **Task Tracking & Audited Updates (`app/services/task_service.py`)**:
-   - Rich task filtering by status, completion flag, blocked flag, owner, and due dates.
-   - Audited PATCH updates logging user attribution and timestamped transition traces into the task's audit history.
-   - Instant progress summary calculating completion percentages, overdue counts, and blocked item counts.
-
-5. **Project Dashboard Summary (`app/services/dashboard_service.py`)**:
-   - Unified single-call endpoint (`GET /api/v1/projects/{id}/dashboard`) providing the frontend with all project KPIs, risk severities, progress rates, recent activity feeds, and critical highlights in one request.
-
----
-
-## Evidence-First Handover Stage
-
-1. **Structured Synthesis (`app/services/handover_service.py`)**:
-   - Gathers verified database items (decisions, tasks, risks, dependencies, gaps, conflicts, commit provenance).
-   - Generates 10 structured sections: Project Overview, Completed Work, Pending & Blocked Tasks, Key Decisions, Open Risks, Dependencies & Critical Paths, Knowledge Gaps, Conflicts Needing Resolution, Recommended Continuation Plan, and Departing Contributor Knowledge Continuity.
-   - Narrative generated by Gemini via versioned prompt templates (`app/prompts/handover_v1.py`), requiring every statement to reference backing item IDs.
-
-2. **Programmatic Claim Validation (`app/services/handover_validator.py`)**:
-   - Every claim statement is verified against genuine database items and evidence.
-   - Ungrounded or fabricated statements lacking evidence citations are dropped or visibly flagged (`[FLAGGED - UNVERIFIED]`).
-   - Distinguishes `[VERIFIED FACT]`, `[APPROVED]`, `[PENDING]`, and `[AI INFERENCE]` tags for front-end labeling.
-
-3. **Versioning & Approval Workflow**:
-   - Sequential versioning (`v1`, `v2`, `v3`).
-   - State machine: `draft` -> `in_review` -> `approved` (or `rejected` with comment).
-   - **Immutability**: Once approved, reports are permanently locked against modifications or re-reviews (HTTP 409).
-   - Section-level diffing endpoint comparing narrative text, claim counts, and evidence counts between any two versions.
-
-4. **Multi-Format Export (`app/services/handover_exporter.py`)**:
-   - **Markdown**: Formatted with status badges, claim badges, numbered footnotes, and a full Evidence & Grounding Appendix.
-   - **PDF**: Generated via ReportLab with typography, status banners, bullet callouts, and an Evidence Appendix table.
-   - **DOCX**: Formatted Microsoft Word document generated via `python-docx` with styled tables and appendices.
-
-5. **Audit Logging & Activity Feed (`app/services/audit_service.py`)**:
-   - Records reviews, approvals, member role changes, and exports in the `audit_logs` table.
-   - Accessible via `GET /api/v1/projects/{id}/activity`.
-
-
-
-
+- **Object Storage**: The current storage abstraction uses local disk (`LocalStorageBackend`); future scope includes pluggable AWS S3 and Google Cloud Storage drivers.
+- **Realtime Job Push**: Progress is currently polled via HTTP; future iterations will support WebSockets or Server-Sent Events (SSE) for realtime chunk progress.
+- **Connectors**: Next connector plugins to be introduced: Slack channel parser, Jira issue tracker, and Google Drive folder synchronization.

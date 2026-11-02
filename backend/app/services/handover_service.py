@@ -930,6 +930,21 @@ class HandoverService:
                 v_copy = dict(v)
                 if "key" not in v_copy:
                     v_copy["key"] = k
+                if "narrative" not in v_copy and "content" in v_copy:
+                    v_copy["narrative"] = v_copy.get("content", "")
+                if "claims" in v_copy and isinstance(v_copy["claims"], list):
+                    clean_claims = []
+                    for c in v_copy["claims"]:
+                        if isinstance(c, dict):
+                            c_copy = dict(c)
+                            if "text" not in c_copy and "statement" in c_copy:
+                                c_copy["text"] = c_copy.get("statement", "")
+                            if "referenced_item_ids" not in c_copy and "item_ids" in c_copy:
+                                c_copy["referenced_item_ids"] = c_copy.get("item_ids", [])
+                            clean_claims.append(c_copy)
+                        else:
+                            clean_claims.append(c)
+                    v_copy["claims"] = clean_claims
                 sec_obj = HandoverSection.model_validate(v_copy)
             else:
                 sec_obj = HandoverSection.model_validate(v)

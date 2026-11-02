@@ -4,6 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_active_user, require_project_role
+from app.core.rate_limit import rate_limit_expensive
 from app.db.session import get_db
 from app.models.enums import ProjectRole
 from app.models.member import ProjectMember
@@ -30,6 +31,7 @@ router = APIRouter()
     response_model=IngestionJobRead,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Start handover generation as a background job (requires member role or higher)",
+    dependencies=[Depends(rate_limit_expensive)],
 )
 async def start_handover_generation(
     project_id: uuid.UUID,

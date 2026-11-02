@@ -16,7 +16,13 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "ProjectX Backend"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
+    DEMO_MODE: bool = False
     API_V1_STR: str = "/api/v1"
+
+    # Rate Limiting
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_REQUESTS_PER_MINUTE: int = 60
+    RATE_LIMIT_EXPENSIVE_PER_MINUTE: int = 15
 
     # Security & Auth
     SECRET_KEY: str = "projectx-secret-key-change-in-production-min-32-bytes"
@@ -31,6 +37,10 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "projectx"
     DATABASE_URL: str | None = None
     TEST_DATABASE_URL: str | None = None
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT_SECONDS: float = 30.0
+    DB_POOL_PRE_PING: bool = True
 
     # CORS
     CORS_ORIGINS: list[str] = [
@@ -83,6 +93,12 @@ class Settings(BaseSettings):
         ".docx",
         ".pptx",
         ".txt",
+        ".py",
+        ".ts",
+        ".js",
+        ".json",
+        ".yaml",
+        ".yml",
     ]
 
     # Ingestion & Chunking

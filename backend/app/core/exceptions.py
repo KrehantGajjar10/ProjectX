@@ -12,12 +12,14 @@ class AppException(Exception):
         code: str = "INTERNAL_SERVER_ERROR",
         message: str = "An unexpected error occurred.",
         details: Any = None,
+        headers: dict[str, str] | None = None,
     ):
         super().__init__(message)
         self.status_code = status_code
         self.code = code
         self.message = message
         self.details = details
+        self.headers = headers
 
 
 class NotFoundError(AppException):
@@ -85,6 +87,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                     "details": exc.details,
                 }
             },
+            headers=exc.headers,
         )
 
     @app.exception_handler(HTTPException)

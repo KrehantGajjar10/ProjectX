@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import require_project_role
+from app.core.rate_limit import rate_limit_expensive
 from app.db.session import get_db
 from app.models.enums import KnowledgeCategory, ProjectRole
 from app.models.member import ProjectMember
@@ -25,6 +26,7 @@ router = APIRouter()
     "/{project_id}/search",
     response_model=QAResponse | SearchResultsResponse,
     summary="Contextual Q&A and hybrid retrieval endpoint",
+    dependencies=[Depends(rate_limit_expensive)],
 )
 async def project_search_or_qa(
     project_id: uuid.UUID,
@@ -103,6 +105,7 @@ async def project_plain_search(
     response_model=ReindexResponse,
     status_code=status.HTTP_200_OK,
     summary="Reindex all project chunks and knowledge items into Qdrant",
+    dependencies=[Depends(rate_limit_expensive)],
 )
 async def reindex_project(
     project_id: uuid.UUID,

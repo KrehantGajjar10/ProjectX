@@ -97,7 +97,8 @@ async def create_or_update_upload_source(
 
         # Generate unique storage path
         unique_id = uuid.uuid4().hex[:8]
-        safe_name = f"{unique_id}_{filename}"
+        safe_filename = Path(filename).name
+        safe_name = f"{unique_id}_{safe_filename}"
         storage_rel_path = f"projects/{project_id}/uploads/{safe_name}"
 
         # Save to storage

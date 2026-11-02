@@ -40,7 +40,7 @@ class IndexingService:
     ) -> dict[str, Any]:
         """Indexes new or modified chunks and knowledge items for a project into Qdrant."""
         # 0. Check API Key configuration
-        if not getattr(self.gemini, "api_key", None):
+        if not getattr(self.gemini, "api_key", None) and not settings.DEMO_MODE:
             logger.warning(
                 "Project %s: GEMINI_API_KEY is not configured. Skipping vector indexing.",
                 project_id,

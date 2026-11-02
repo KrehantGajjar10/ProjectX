@@ -104,7 +104,7 @@ class ExtractionService:
     ) -> dict[str, Any]:
         """Runs the complete AI extraction and reconstruction pipeline across all project chunks."""
         # 0. Check if Gemini API key is configured
-        if not getattr(self.gemini, "api_key", None):
+        if not getattr(self.gemini, "api_key", None) and not settings.DEMO_MODE:
             logger.warning(
                 "Project %s: GEMINI_API_KEY is not configured. Skipping AI extraction stage.",
                 project_id,

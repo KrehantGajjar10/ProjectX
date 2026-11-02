@@ -9,6 +9,7 @@ from google.genai import types
 from google.genai.errors import APIError
 
 from app.core.config import settings
+from app.integrations.demo_ai import DemoAIService
 from app.prompts.extraction_v1 import (
     EXTRACTION_SYSTEM_INSTRUCTION_V1,
     EXTRACTION_USER_TEMPLATE_V1,
@@ -78,6 +79,14 @@ class GeminiClient:
         """Extracts structured knowledge items from a document chunk using structured outputs."""
         if not chunk_content.strip():
             return ExtractionResult(items=[])
+
+        if settings.DEMO_MODE:
+            logger.info("DEMO_MODE active: returning realistic canned extraction response.")
+            return DemoAIService.demo_extract_knowledge(
+                chunk_content=chunk_content,
+                file_path=file_path,
+                location_info=location_info,
+            )
 
         prompt = EXTRACTION_USER_TEMPLATE_V1.format(
             file_path=file_path,
@@ -149,6 +158,10 @@ class GeminiClient:
         if not texts:
             return []
 
+        if settings.DEMO_MODE:
+            logger.info("DEMO_MODE active: returning deterministic canned embeddings.")
+            return DemoAIService.demo_embed_texts(texts, dimension=self.embedding_dimension)
+
         clean_texts = [t.strip() if t.strip() else " " for t in texts]
         batch_size = settings.EMBEDDING_BATCH_SIZE
         all_embeddings: list[list[float]] = []
@@ -215,6 +228,14 @@ class GeminiClient:
         history_context: str = "None",
     ) -> GroundedQAResult:
         """Answers a user question grounded exclusively in retrieved context."""
+        if settings.DEMO_MODE:
+            logger.info("DEMO_MODE active: returning realistic canned Q&A answer.")
+            return DemoAIService.demo_contextual_qa(
+                question=question,
+                chunks_context=chunks_context,
+                knowledge_context=knowledge_context,
+            )
+
         prompt = QA_USER_TEMPLATE_V1.format(
             chunks_context=chunks_context or "No chunk context retrieved.",
             knowledge_context=knowledge_context or "No curated knowledge items retrieved.",
@@ -285,6 +306,17 @@ class GeminiClient:
         structured_data_json: str,
     ) -> dict[str, Any]:
         """Generates evidence-linked narrative sections for project handover based strictly on structured input."""
+        if settings.DEMO_MODE:
+            logger.info("DEMO_MODE active: returning realistic canned handover narrative.")
+            return DemoAIService.demo_handover_narrative(
+                project_name=project_name,
+                project_description=project_description,
+                departing_member_name=departing_member_name,
+                focus_area=focus_area,
+                approved_only=approved_only,
+                structured_data_json=structured_data_json,
+            )
+
         prompt = HANDOVER_USER_TEMPLATE_V1.format(
             project_name=project_name,
             project_description=project_description or "None",

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import require_project_role
 from app.core.exceptions import NotFoundError
+from app.core.rate_limit import rate_limit_expensive
 from app.db.session import get_db
 from app.models.enums import ProjectRole
 from app.models.member import ProjectMember
@@ -20,6 +21,7 @@ router = APIRouter()
     response_model=IngestionJobRead,
     status_code=status.HTTP_201_CREATED,
     summary="Enqueue a new background ingestion job for project sources (requires member role or higher)",
+    dependencies=[Depends(rate_limit_expensive)],
 )
 async def start_ingestion_job(
     project_id: uuid.UUID,

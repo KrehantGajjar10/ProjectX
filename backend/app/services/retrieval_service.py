@@ -6,6 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.integrations.gemini import GeminiClient, get_gemini_client
 from app.integrations.qdrant import QdrantStore, get_qdrant_store
 from app.models.document import Document, DocumentChunk
@@ -61,7 +62,7 @@ class RetrievalService:
         vector_results: list[dict[str, Any]] = []
         vector_search_succeeded = False
 
-        if getattr(self.gemini, "api_key", None):
+        if getattr(self.gemini, "api_key", None) or settings.DEMO_MODE:
             try:
                 query_vector = await self.gemini.embed_query(clean_query)
                 scored_points = await self.qdrant.search(
@@ -357,7 +358,7 @@ class RetrievalService:
         history_str = "\n".join(history_lines) if history_lines else "None"
 
         # 3. Call Gemini Q&A
-        if not getattr(self.gemini, "api_key", None):
+        if not getattr(self.gemini, "api_key", None) and not settings.DEMO_MODE:
             logger.info("GEMINI_API_KEY is not configured. Returning retrieved context summary.")
             answer_text = (
                 "GEMINI_API_KEY is not configured on the server. "

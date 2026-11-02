@@ -8,6 +8,8 @@ from app.api.v1.endpoints import health
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
+from app.core.logging import setup_logging
+from app.core.middleware import RequestIDMiddleware
 from app.db.session import engine
 
 
@@ -20,6 +22,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 def create_application() -> FastAPI:
+    setup_logging(structured_json=False)
+
     app = FastAPI(
         title=settings.PROJECT_NAME,
         version="0.1.0",
@@ -28,6 +32,9 @@ def create_application() -> FastAPI:
         redoc_url=f"{settings.API_V1_STR}/redoc",
         lifespan=lifespan,
     )
+
+    # Middleware: Request ID and latency tracking
+    app.add_middleware(RequestIDMiddleware)
 
     # Register CORS
     if settings.CORS_ORIGINS:

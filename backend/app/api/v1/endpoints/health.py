@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.db.session import get_db
 from app.integrations.neo4j import get_neo4j_client
+from app.integrations.qdrant import get_qdrant_store
 from app.schemas.common import HealthResponse
 
 router = APIRouter()
@@ -36,6 +37,14 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> HealthResponse | J
     neo4j_client = get_neo4j_client()
     neo4j_info = await neo4j_client.check_health()
 
+    # Qdrant status
+    qdrant_info = {"status": "connected"}
+    try:
+        qdrant_store = get_qdrant_store()
+        await qdrant_store.client.get_collections()
+    except Exception as exc:
+        qdrant_info = {"status": f"unhealthy: {exc}"}
+
     overall_status = "healthy"
     if settings.NEO4J_ENABLED and neo4j_info.get("status", "").startswith("unhealthy"):
         overall_status = "degraded"
@@ -44,6 +53,8 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> HealthResponse | J
         status=overall_status,
         environment=settings.ENVIRONMENT,
         database=db_status,
+        qdrant=qdrant_info,
         neo4j=neo4j_info,
+        demo_mode=settings.DEMO_MODE,
         version="0.1.0",
     )
