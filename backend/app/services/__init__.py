@@ -1,10 +1,14 @@
 from app.services import (
+    audit_service,
     auth_service,
     chunking_service,
     dashboard_service,
     evidence_verifier,
     extraction_service,
     graph_service,
+    handover_exporter,
+    handover_service,
+    handover_validator,
     indexing_service,
     ingestion_service,
     knowledge_service,
@@ -36,4 +40,8 @@ __all__ = [
     "task_service",
     "dashboard_service",
     "neo4j_sync_service",
+    "audit_service",
+    "handover_service",
+    "handover_validator",
+    "handover_exporter",
 ]

@@ -23,6 +23,7 @@ from app.schemas.knowledge import (
     KnowledgeItemRead,
     KnowledgeItemReviewRequest,
 )
+from app.services.audit_service import get_audit_service
 from app.services.knowledge_service import knowledge_service
 
 router = APIRouter()
@@ -109,6 +110,20 @@ async def review_knowledge_item(
         reviewer_id=current_user.id,
         review_data=review_data,
     )
+    audit_service = get_audit_service()
+    await audit_service.record_audit_event(
+        db=db,
+        project_id=project_id,
+        actor_id=current_user.id,
+        action="knowledge_review",
+        entity_type="knowledge_item",
+        entity_id=item.id,
+        details={
+            "review_status": review_data.review_status.value,
+            "title": item.title,
+            "review_note": review_data.review_note,
+        },
+    )
     return KnowledgeItemDetailRead.model_validate(item)
 
 
@@ -132,6 +147,19 @@ async def bulk_review_knowledge_items(
         project_id=project_id,
         reviewer_id=current_user.id,
         bulk_data=bulk_data,
+    )
+    audit_service = get_audit_service()
+    await audit_service.record_audit_event(
+        db=db,
+        project_id=project_id,
+        actor_id=current_user.id,
+        action="knowledge_bulk_review",
+        entity_type="knowledge_item",
+        details={
+            "updated_count": count,
+            "review_status": bulk_data.review_status.value,
+            "item_ids": [str(iid) for iid in bulk_data.item_ids],
+        },
     )
     return BulkReviewResponse(
         updated_count=count,

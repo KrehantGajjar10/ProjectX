@@ -1,3 +1,4 @@
+from app.schemas.audit import AuditLogRead, ProjectActivityResponse
 from app.schemas.common import ErrorDetail, ErrorResponse, HealthResponse
 from app.schemas.dashboard import DashboardHighlights, ProjectDashboardSummary
 from app.schemas.evidence import EvidenceCreate, EvidenceRead
@@ -8,7 +9,21 @@ from app.schemas.graph import (
     GraphNode,
     SubgraphResponse,
 )
-from app.schemas.handover import HandoverReportCreate, HandoverReportRead
+from app.schemas.handover import (
+    EvidenceReference,
+    HandoverClaim,
+    HandoverDiffResponse,
+    HandoverDiffSection,
+    HandoverGenerateRequest,
+    HandoverGenerationJobStatus,
+    HandoverReportCreate,
+    HandoverReportDetailRead,
+    HandoverReportRead,
+    HandoverReportVersionSummary,
+    HandoverReviewRequest,
+    HandoverSection,
+    LatestHandoverResponse,
+)
 from app.schemas.ingestion import IngestionJobCreate, IngestionJobRead
 from app.schemas.knowledge import (
     BulkReviewRequest,
@@ -85,6 +100,19 @@ __all__ = [
     "TaskProgressSummary",
     "HandoverReportCreate",
     "HandoverReportRead",
+    "HandoverReportDetailRead",
+    "HandoverReportVersionSummary",
+    "HandoverGenerateRequest",
+    "EvidenceReference",
+    "HandoverClaim",
+    "HandoverSection",
+    "HandoverReviewRequest",
+    "HandoverDiffSection",
+    "HandoverDiffResponse",
+    "HandoverGenerationJobStatus",
+    "LatestHandoverResponse",
+    "AuditLogRead",
+    "ProjectActivityResponse",
     "GitHubSourceCreate",
     "SourceRead",
     "UploadFileDetail",

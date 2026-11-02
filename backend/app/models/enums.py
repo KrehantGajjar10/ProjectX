@@ -54,6 +54,7 @@ class HandoverReportStatus(enum.StrEnum):
     DRAFT = "draft"
     IN_REVIEW = "in_review"
     APPROVED = "approved"
+    REJECTED = "rejected"
 
 
 # Helper for role hierarchy comparisons

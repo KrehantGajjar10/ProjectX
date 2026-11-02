@@ -20,6 +20,7 @@ from app.schemas.project import (
     ProjectUpdate,
 )
 from app.services import project_service
+from app.services.audit_service import get_audit_service
 
 router = APIRouter()
 
@@ -158,6 +159,16 @@ async def add_member(
         email=member_in.email,
         role=member_in.role,
     )
+    audit_service = get_audit_service()
+    await audit_service.record_audit_event(
+        db=db,
+        project_id=project_id,
+        actor_id=current_member.user_id,
+        action="member_add",
+        entity_type="project_member",
+        entity_id=member.id,
+        details={"email": member_in.email, "role": member_in.role.value},
+    )
     return ProjectMemberRead.model_validate(member)
 
 
@@ -194,6 +205,16 @@ async def update_member_role(
     updated_member = await project_service.update_project_member_role(
         db, target_member, role_in.role
     )
+    audit_service = get_audit_service()
+    await audit_service.record_audit_event(
+        db=db,
+        project_id=project_id,
+        actor_id=current_member.user_id,
+        action="member_role_update",
+        entity_type="project_member",
+        entity_id=updated_member.id,
+        details={"user_id": str(updated_member.user_id), "new_role": role_in.role.value},
+    )
     return ProjectMemberRead.model_validate(updated_member)
 
 
@@ -222,3 +243,13 @@ async def remove_member(
         raise AuthorizationError(message="Only project owners can remove an owner.")
 
     await project_service.remove_project_member(db, target_member)
+    audit_service = get_audit_service()
+    await audit_service.record_audit_event(
+        db=db,
+        project_id=project_id,
+        actor_id=current_member.user_id,
+        action="member_remove",
+        entity_type="project_member",
+        entity_id=member_id,
+        details={"removed_user_id": str(target_member.user_id)},
+    )

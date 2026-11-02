@@ -13,6 +13,10 @@ from app.prompts.extraction_v1 import (
     EXTRACTION_SYSTEM_INSTRUCTION_V1,
     EXTRACTION_USER_TEMPLATE_V1,
 )
+from app.prompts.handover_v1 import (
+    HANDOVER_SYSTEM_INSTRUCTION_V1,
+    HANDOVER_USER_TEMPLATE_V1,
+)
 from app.prompts.qa_v1 import (
     QA_SYSTEM_INSTRUCTION_V1,
     QA_USER_TEMPLATE_V1,
@@ -270,6 +274,64 @@ class GeminiClient:
                 is_sufficient=False,
                 confidence=0.0,
             )
+
+    async def generate_handover_narrative(
+        self,
+        project_name: str,
+        project_description: str | None,
+        departing_member_name: str | None,
+        focus_area: str | None,
+        approved_only: bool,
+        structured_data_json: str,
+    ) -> dict[str, Any]:
+        """Generates evidence-linked narrative sections for project handover based strictly on structured input."""
+        prompt = HANDOVER_USER_TEMPLATE_V1.format(
+            project_name=project_name,
+            project_description=project_description or "None",
+            departing_member_name=departing_member_name or "None",
+            focus_area=focus_area or "All Areas",
+            approved_only=str(approved_only),
+            structured_data_json=structured_data_json,
+        )
+
+        config = types.GenerateContentConfig(
+            system_instruction=HANDOVER_SYSTEM_INSTRUCTION_V1,
+            temperature=self.temperature,
+            response_mime_type="application/json",
+        )
+
+        async with self.semaphore:
+            last_err: Exception | None = None
+            for attempt in range(self.max_retries + 1):
+                try:
+                    async with asyncio.timeout(self.timeout):
+                        response = await self.client.aio.models.generate_content(
+                            model=self.model_name,
+                            contents=prompt,
+                            config=config,
+                        )
+
+                    text_res = response.text
+                    if not text_res:
+                        return {}
+                    return json.loads(text_res)
+
+                except (TimeoutError, APIError, ConnectionError) as exc:
+                    last_err = exc
+                    if attempt == self.max_retries:
+                        logger.error(
+                            "Gemini handover generation failed after %d retries: %s",
+                            self.max_retries,
+                            exc,
+                        )
+                        raise
+
+                    backoff = (2**attempt) * 1.5 + random.uniform(0.1, 0.5)
+                    await asyncio.sleep(backoff)
+
+            if last_err:
+                raise last_err
+            return {}
 
 
 _global_gemini_client: GeminiClient | None = None

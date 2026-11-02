@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -39,6 +39,23 @@ class HandoverReport(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         default=HandoverReportStatus.DRAFT,
         index=True,
     )
+    departing_member_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    focus_area: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    approved_only: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+    review_comment: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
     content_sections: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
@@ -48,6 +65,12 @@ class HandoverReport(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
+    )
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     approved_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -62,6 +85,10 @@ class HandoverReport(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     # Relationships
     project: Mapped["Project"] = relationship("Project", back_populates="handover_reports")
+    creator: Mapped["User | None"] = relationship(
+        "User",
+        foreign_keys=[created_by_id],
+    )
     approved_by: Mapped["User | None"] = relationship(
         "User",
         back_populates="approved_reports",

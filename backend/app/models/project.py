@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.models.audit import AuditLog
     from app.models.dependency import Dependency
     from app.models.document import Document
     from app.models.evidence import Evidence
@@ -86,6 +87,11 @@ class Project(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     handover_reports: Mapped[list["HandoverReport"]] = relationship(
         "HandoverReport",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    audit_logs: Mapped[list["AuditLog"]] = relationship(
+        "AuditLog",
         back_populates="project",
         cascade="all, delete-orphan",
     )

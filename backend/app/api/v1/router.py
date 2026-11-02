@@ -1,9 +1,11 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    activity,
     auth,
     dashboard,
     dependencies,
+    handover,
     health,
     ingestion,
     knowledge,
@@ -29,3 +31,5 @@ api_router.include_router(risks.router, prefix="/projects", tags=["risks"])
 api_router.include_router(timeline.router, prefix="/projects", tags=["timeline"])
 api_router.include_router(tasks.router, prefix="/projects", tags=["tasks"])
 api_router.include_router(dashboard.router, prefix="/projects", tags=["dashboard"])
+api_router.include_router(handover.router, prefix="/projects", tags=["handover"])
+api_router.include_router(activity.router, prefix="/projects", tags=["activity"])

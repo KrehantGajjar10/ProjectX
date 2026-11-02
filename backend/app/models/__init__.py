@@ -1,3 +1,4 @@
+from app.models.audit import AuditLog
 from app.models.dependency import Dependency
 from app.models.document import Document, DocumentChunk
 from app.models.enums import (
@@ -34,6 +35,7 @@ __all__ = [
     "Dependency",
     "Evidence",
     "HandoverReport",
+    "AuditLog",
     "ProjectRole",
     "IngestionJobStatus",
     "DocumentStatus",
