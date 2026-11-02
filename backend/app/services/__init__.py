@@ -1,15 +1,21 @@
 from app.services import (
     auth_service,
     chunking_service,
+    dashboard_service,
     evidence_verifier,
     extraction_service,
+    graph_service,
     indexing_service,
     ingestion_service,
     knowledge_service,
+    neo4j_sync_service,
     project_service,
     retrieval_service,
+    risk_service,
     source_service,
     storage,
+    task_service,
+    timeline_service,
 )
 
 __all__ = [
@@ -24,4 +30,10 @@ __all__ = [
     "storage",
     "indexing_service",
     "retrieval_service",
+    "graph_service",
+    "risk_service",
+    "timeline_service",
+    "task_service",
+    "dashboard_service",
+    "neo4j_sync_service",
 ]

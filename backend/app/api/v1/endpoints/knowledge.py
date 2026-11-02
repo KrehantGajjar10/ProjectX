@@ -10,7 +10,6 @@ from app.models.enums import (
     KnowledgeOrigin,
     KnowledgeReviewStatus,
     ProjectRole,
-    TaskStatus,
 )
 from app.models.member import ProjectMember
 from app.models.project import Project
@@ -24,7 +23,6 @@ from app.schemas.knowledge import (
     KnowledgeItemRead,
     KnowledgeItemReviewRequest,
 )
-from app.schemas.task import TaskRead
 from app.services.knowledge_service import knowledge_service
 
 router = APIRouter()
@@ -139,31 +137,6 @@ async def bulk_review_knowledge_items(
         updated_count=count,
         review_status=bulk_data.review_status,
     )
-
-
-@router.get(
-    "/{project_id}/tasks",
-    response_model=list[TaskRead],
-    summary="List project tasks with status and owner filters",
-)
-async def list_project_tasks(
-    project_id: uuid.UUID,
-    status: TaskStatus | None = Query(None, description="Filter by task status"),
-    owner_id: uuid.UUID | None = Query(None, description="Filter by task owner ID"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
-    _membership: tuple[Project, ProjectMember] = Depends(require_project_role(ProjectRole.VIEWER)),
-    db: AsyncSession = Depends(get_db),
-) -> list[TaskRead]:
-    tasks = await knowledge_service.list_project_tasks(
-        db=db,
-        project_id=project_id,
-        status=status,
-        owner_id=owner_id,
-        skip=skip,
-        limit=limit,
-    )
-    return [TaskRead.model_validate(t) for t in tasks]
 
 
 @router.get(

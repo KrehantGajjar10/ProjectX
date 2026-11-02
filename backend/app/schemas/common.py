@@ -17,4 +17,5 @@ class HealthResponse(BaseModel):
     status: str
     environment: str
     database: str
+    neo4j: dict[str, Any] | None = None
     version: str = "0.1.0"

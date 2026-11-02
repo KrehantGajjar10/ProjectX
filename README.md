@@ -184,9 +184,27 @@ uv run ruff format --check
 - `GET /{item_id}` - Get single knowledge item with loaded evidence, relational tasks, and dependency graph (requires `viewer`+)
 - `POST /{item_id}/review` - Review (approve, reject, edit) knowledge item with auditor identity & timestamp tracking (requires `reviewer`+)
 - `POST /bulk-review` - Bulk review status update across multiple items (requires `reviewer`+)
-- `GET /tasks` - List project tasks with status and owner filters (requires `viewer`+)
 - `GET /gaps` - List detected knowledge gaps (missing owners/dates, decisions lacking rationale, risks without mitigation, unverified evidence) (requires `viewer`+)
 - `GET /conflicts` - List detected conflicting decisions and opposing technical stances (requires `viewer`+)
+
+### Task Tracking (`/api/v1/projects/{project_id}/tasks`)
+- `GET /` - List and filter tasks with rich filters (`status`, `is_completed`, `is_blocked`, `owner_id`, `due_before`, `due_after`, `priority`) and pagination (requires `viewer`+)
+- `GET /progress` - Task completion metrics (total, completed, in-progress, todo, blocked, cancelled, overdue, unassigned, completion percentage) (requires `viewer`+)
+- `PATCH /{task_id}` - Audited update of task status, owner, priority, due date, title, or description (requires `member`+)
+
+### Dependency Mapping & Graph Analysis (`/api/v1/projects/{project_id}/dependencies`)
+- `GET /graph` - Full project dependency graph returning nodes, edges, cycle detection findings, and blocked chains findings (requires `viewer`+)
+- `GET /subgraph/{node_id}` - Upstream and downstream subgraph for a specific node traversed up to depth $N$ via PostgreSQL recursive CTE (requires `viewer`+)
+- `POST /sync-neo4j` - Mirror approved knowledge items and dependencies into Neo4j when enabled (requires `admin`+)
+
+### Risk Detection (`/api/v1/projects/{project_id}/risks`)
+- `GET /` - Unified risk audit combining extracted risks with deterministic computed signals (overdue tasks, missing owners, unresolved conflicts, unverified grounding, stale tasks, SPOK) with severity breakdown and filters (requires `viewer`+)
+
+### Project Timeline (`/api/v1/projects/{project_id}/timeline`)
+- `GET /` - Chronological timeline feed combining milestones, decisions, commit history, and task status changes with date filters and pagination (requires `viewer`+)
+
+### Project Dashboard Summary (`/api/v1/projects/{project_id}/dashboard`)
+- `GET /` - Unified single-call dashboard payload aggregating project metadata, item categories, review statuses, open risk severities, task progress, last ingestion status, recent activity, and critical highlights (requires `viewer`+)
 
 ### Semantic Search & Contextual Q&A (`/api/v1/projects/{project_id}`)
 - `POST /search` - Contextual Q&A (default) or plain ranked search (`include_answer=false`) (requires `viewer`+)
@@ -235,5 +253,38 @@ uv run ruff format --check
    - Answers questions strictly using retrieved context chunks and curated items.
    - Programmatically verifies cited excerpts against source chunk text before returning them.
    - Rejects out-of-domain questions with `is_sufficient=false` and `confidence=0.0` without hallucinating.
+
+---
+
+## Dependency Graph, Risks, Timeline & Task Tracking
+
+1. **Dependency Mapping & Graph Algorithms (`app/services/graph_service.py`)**:
+   - Traversal via **PostgreSQL recursive Common Table Expressions (CTE)** for upstream and downstream traversal up to depth $N$ without N+1 queries.
+   - **Circular Dependency Detection**: Depth-first search (DFS) with recursion stack cycle tracking; detects cycles and flags them with `critical` severity.
+   - **Blocked Chains Detection**: Identifies downstream items blocked by incomplete tasks, blocked tasks, or rejected architectural decisions with `high` severity.
+   - **Optional Neo4j Mirroring (`app/integrations/neo4j.py`, `app/services/neo4j_sync_service.py`)**: Behind `NEO4J_ENABLED=false` (off by default); mirrors approved items and relational edges when enabled. The backend functions 100% identically without Neo4j.
+
+2. **Deterministic Risk Detection (`app/services/risk_service.py`)**:
+   - Combines AI-extracted risks with deterministic relational signals:
+     - **Overdue Tasks**: Non-completed tasks past their due date (`critical` if >= 7 days, `high` otherwise).
+     - **Unassigned Tasks**: Incomplete tasks without designated owners (`medium` / `high` if due within 3 days).
+     - **Stale Tasks**: Tasks inactive with no status changes for > 14 days (`medium`).
+     - **Unresolved Conflicts**: Items flagged with contradictory architectural stances (`high`).
+     - **Unverified Grounding**: Items with unverified evidence excerpts or low model confidence (< 0.70).
+     - **Single Point of Knowledge (SPOK)**: Repositories where > 85% of analyzed commits belong to a single author (`high` bus factor).
+   - Every risk includes severity rating, deterministic rationale, and supporting evidence links.
+
+3. **Project Timeline (`app/services/timeline_service.py`)**:
+   - Aggregates milestones, key decisions, task lifecycle transitions, and source commit histories.
+   - Sorted in reverse chronological order with date range filters (`start_date`, `end_date`), event type filtering, and pagination.
+
+4. **Task Tracking & Audited Updates (`app/services/task_service.py`)**:
+   - Rich task filtering by status, completion flag, blocked flag, owner, and due dates.
+   - Audited PATCH updates logging user attribution and timestamped transition traces into the task's audit history.
+   - Instant progress summary calculating completion percentages, overdue counts, and blocked item counts.
+
+5. **Project Dashboard Summary (`app/services/dashboard_service.py`)**:
+   - Unified single-call endpoint (`GET /api/v1/projects/{id}/dashboard`) providing the frontend with all project KPIs, risk severities, progress rates, recent activity feeds, and critical highlights in one request.
+
 
 

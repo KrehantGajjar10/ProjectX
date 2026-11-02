@@ -1,5 +1,13 @@
 from app.schemas.common import ErrorDetail, ErrorResponse, HealthResponse
+from app.schemas.dashboard import DashboardHighlights, ProjectDashboardSummary
 from app.schemas.evidence import EvidenceCreate, EvidenceRead
+from app.schemas.graph import (
+    DependencyGraphResponse,
+    GraphEdge,
+    GraphFinding,
+    GraphNode,
+    SubgraphResponse,
+)
 from app.schemas.handover import HandoverReportCreate, HandoverReportRead
 from app.schemas.ingestion import IngestionJobCreate, IngestionJobRead
 from app.schemas.knowledge import (
@@ -23,6 +31,7 @@ from app.schemas.project import (
     ProjectRead,
     ProjectUpdate,
 )
+from app.schemas.risk import RiskItemRead, RiskSummaryRead
 from app.schemas.search import (
     ChatMessage,
     CitationRead,
@@ -38,7 +47,8 @@ from app.schemas.source import (
     UploadFileDetail,
     UploadSourceResponse,
 )
-from app.schemas.task import TaskCreate, TaskRead
+from app.schemas.task import TaskCreate, TaskProgressSummary, TaskRead, TaskUpdate
+from app.schemas.timeline import TimelineEventRead, TimelineResponse
 from app.schemas.user import Token, TokenPayload, UserCreate, UserLogin, UserRead
 
 __all__ = [
@@ -71,6 +81,8 @@ __all__ = [
     "EvidenceRead",
     "TaskCreate",
     "TaskRead",
+    "TaskUpdate",
+    "TaskProgressSummary",
     "HandoverReportCreate",
     "HandoverReportRead",
     "GitHubSourceCreate",
@@ -86,4 +98,15 @@ __all__ = [
     "SearchResultItem",
     "SearchResultsResponse",
     "ReindexResponse",
+    "GraphNode",
+    "GraphEdge",
+    "GraphFinding",
+    "DependencyGraphResponse",
+    "SubgraphResponse",
+    "RiskItemRead",
+    "RiskSummaryRead",
+    "TimelineEventRead",
+    "TimelineResponse",
+    "DashboardHighlights",
+    "ProjectDashboardSummary",
 ]
