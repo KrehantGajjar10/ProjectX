@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Container } from "@/components/landing/container";
 import { buttonVariants } from "@/components/ui/button";
@@ -57,9 +58,19 @@ export function Header() {
           ))}
         </nav>
 
-        {/* Actions: Theme Toggle & Primary CTA */}
+        {/* Actions: Theme Toggle, Auth & Primary CTA */}
         <div className="flex items-center gap-2 sm:gap-2.5">
           <ThemeToggle />
+
+          <Link
+            href="/login"
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "sm" }),
+              "hidden sm:inline-flex text-xs font-medium"
+            )}
+          >
+            Sign In
+          </Link>
 
           <a
             href="#workflow"
@@ -107,7 +118,17 @@ export function Header() {
               ))}
             </nav>
 
-            <div className="pt-2 border-t border-border">
+            <div className="pt-2 border-t border-border flex flex-col gap-2">
+              <Link
+                href="/login"
+                onClick={closeMobileMenu}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "w-full justify-center text-xs"
+                )}
+              >
+                Sign In
+              </Link>
               <a
                 href="#workflow"
                 onClick={closeMobileMenu}
