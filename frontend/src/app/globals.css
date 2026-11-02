@@ -1,0 +1,163 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *, .dark, .dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+  --color-surface-raised: var(--surface-raised);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-copper: var(--copper);
+  --color-copper-foreground: var(--copper-foreground);
+  --color-violet: var(--violet);
+  --color-violet-foreground: var(--violet-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.5rem;
+
+  /* Light Theme: Clean, warm neutral base with accessible Emerald primary */
+  --background: #ffffff;
+  --foreground: #111827;
+  --surface: #f8fafc;
+  --surface-foreground: #0f172a;
+  --surface-raised: #f1f5f9;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+
+  /* Emerald Primary (Darker in light mode for strong contrast) */
+  --primary: #087a55;
+  --primary-foreground: #ffffff;
+
+  /* Neutral secondary */
+  --secondary: #f1f5f9;
+  --secondary-foreground: #1e293b;
+
+  /* Muted states */
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+
+  /* Accent states */
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+
+  /* Identity Secondary Accents */
+  --copper: #c25e1a;
+  --copper-foreground: #ffffff;
+  --violet: #7c3aed;
+  --violet-foreground: #ffffff;
+
+  /* Status Colors */
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --success: #087a55;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+
+  /* Lines and Inputs */
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #087a55;
+}
+
+.dark {
+  /* Dark Theme: Obsidian base (#09090B), charcoal surfaces (#18181B) */
+  --background: #09090b;
+  --foreground: #fafafa;
+  --surface: #141417;
+  --surface-foreground: #fafafa;
+  --surface-raised: #1f1f23;
+  --card: #141417;
+  --card-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
+
+  /* Emerald Primary (#10B981) */
+  --primary: #10b981;
+  --primary-foreground: #022c22;
+
+  /* Neutral secondary */
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+
+  /* Muted states */
+  --muted: #1f1f23;
+  --muted-foreground: #a1a1aa;
+
+  /* Accent states */
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+
+  /* Identity Secondary Accents */
+  --copper: #d97736;
+  --copper-foreground: #ffffff;
+  --violet: #8b5cf6;
+  --violet-foreground: #ffffff;
+
+  /* Status Colors */
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --success: #10b981;
+  --success-foreground: #022c22;
+  --warning: #f59e0b;
+  --warning-foreground: #1c1917;
+
+  /* Lines and Inputs */
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #10b981;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Custom selection matching brand Emerald */
+::selection {
+  background-color: rgba(16, 185, 129, 0.25);
+  color: inherit;
+}
