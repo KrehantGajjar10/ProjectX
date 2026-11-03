@@ -100,16 +100,28 @@ export function AppSidebar({
         {
           label: "Graph",
           icon: Network,
-          href: "#",
-          isActive: false,
-          isAvailable: false,
+          href: activeProjectId
+            ? `/app/projects/${activeProjectId}/graph`
+            : undefined,
+          onClick: !activeProjectId ? onOpenCreateProjectModal : undefined,
+          isActive: Boolean(
+            activeProjectId &&
+              pathname.startsWith(`/app/projects/${activeProjectId}/graph`)
+          ),
+          isAvailable: true,
         },
         {
           label: "Search & Q&A",
           icon: Search,
-          href: "#",
-          isActive: false,
-          isAvailable: false,
+          href: activeProjectId
+            ? `/app/projects/${activeProjectId}/search`
+            : undefined,
+          onClick: !activeProjectId ? onOpenCreateProjectModal : undefined,
+          isActive: Boolean(
+            activeProjectId &&
+              pathname.startsWith(`/app/projects/${activeProjectId}/search`)
+          ),
+          isAvailable: true,
         },
         {
           label: "Risks",
