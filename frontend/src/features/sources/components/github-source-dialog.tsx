@@ -16,7 +16,6 @@ import {
   CheckCircle2,
   FolderGit2,
   GitBranch,
-  Info,
   Loader2,
   ShieldCheck,
   Sparkles,
