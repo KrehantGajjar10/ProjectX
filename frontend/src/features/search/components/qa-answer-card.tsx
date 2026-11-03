@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import type { CitationRead, QAResponse } from "../types/search";
+import type { QAResponse } from "../types/search";
 import {
   AlertTriangle,
   BookOpen,

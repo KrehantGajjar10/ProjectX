@@ -6,7 +6,6 @@ import type { ProjectDetailRead } from "@/types/project";
 import type {
   KnowledgeCategory,
   QAResponse,
-  SearchResultItem,
   SearchResultsResponse,
 } from "../types/search";
 import {
@@ -18,10 +17,6 @@ import { SearchResultCard } from "./search-result-card";
 import { QAAnswerCard } from "./qa-answer-card";
 import {
   AlertCircle,
-  CheckCircle2,
-  Filter,
-  History,
-  Layers,
   Loader2,
   RefreshCw,
   Search,

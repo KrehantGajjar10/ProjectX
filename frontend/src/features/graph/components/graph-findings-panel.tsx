@@ -10,9 +10,6 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
-  Info,
-  Layers,
-  X,
 } from "lucide-react";
 
 interface GraphFindingsPanelProps {
@@ -38,7 +35,6 @@ export function GraphFindingsPanel({
 
   const criticalCount = findings.filter((f) => f.severity === "critical").length;
   const highCount = findings.filter((f) => f.severity === "high").length;
-  const mediumCount = findings.filter((f) => f.severity !== "critical" && f.severity !== "high").length;
 
   return (
     <div className="rounded-xl border border-border/80 bg-card/95 shadow-md backdrop-blur-sm transition-all overflow-hidden">

@@ -2,14 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import type { SearchResultItem } from "../types/search";
 import {
   CheckCircle2,
   ExternalLink,
   FileText,
   Layers,
-  Sparkles,
 } from "lucide-react";
 
 interface SearchResultCardProps {

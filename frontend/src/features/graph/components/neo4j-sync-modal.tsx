@@ -9,12 +9,9 @@ import {
   AlertCircle,
   CheckCircle2,
   Database,
-  ExternalLink,
   Info,
   Loader2,
   RefreshCw,
-  Server,
-  Share2,
 } from "lucide-react";
 
 const DialogContext = React.createContext<{
@@ -108,12 +105,14 @@ export function Neo4jSyncModal({
   const [error, setError] = React.useState<string | null>(null);
 
   // Reset state when opening
-  React.useEffect(() => {
+  const [prevOpen, setPrevOpen] = React.useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
       setResult(null);
       setError(null);
     }
-  }, [open]);
+  }
 
   const handleSync = async () => {
     setIsSyncing(true);

@@ -4,8 +4,6 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import type { GraphEdge, GraphFinding, GraphNode } from "../types/graph";
 import {
-  Maximize2,
-  Minimize2,
   Move,
   RotateCcw,
   ZoomIn,
@@ -31,6 +29,101 @@ interface GraphCanvasProps {
 const NODE_WIDTH = 180;
 const NODE_HEIGHT = 60;
 
+function computeAutoLayout(
+  nodes: GraphNode[],
+  edges: GraphEdge[]
+): Map<string, NodePosition> {
+  const posMap = new Map<string, NodePosition>();
+  if (nodes.length === 0) {
+    return posMap;
+  }
+
+  const nodeCount = nodes.length;
+
+  // Partition connected nodes vs isolated
+  const connectedNodeIds = new Set<string>();
+  edges.forEach((e) => {
+    connectedNodeIds.add(e.source_id);
+    connectedNodeIds.add(e.target_id);
+  });
+
+  // Initial positioning in rings / grid
+  const cols = Math.max(1, Math.ceil(Math.sqrt(nodeCount)));
+  const spacingX = 260;
+  const spacingY = 140;
+
+  nodes.forEach((node, i) => {
+    if (connectedNodeIds.has(node.id)) {
+      // Spiral / circle around center for connected nodes
+      const angle = (i / Math.max(1, connectedNodeIds.size)) * 2 * Math.PI;
+      const radius = 220 + Math.floor(i / 8) * 120;
+      posMap.set(node.id, {
+        x: 500 + radius * Math.cos(angle),
+        y: 380 + radius * Math.sin(angle),
+        vx: 0,
+        vy: 0,
+      });
+    } else {
+      // Grid array for isolated nodes at the bottom/side
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      posMap.set(node.id, {
+        x: 100 + col * spacingX,
+        y: 750 + row * spacingY,
+        vx: 0,
+        vy: 0,
+      });
+    }
+  });
+
+  // Run simple force relaxation simulation for 35 iterations
+  const iterations = 35;
+  for (let iter = 0; iter < iterations; iter++) {
+    // Repulsion between connected nodes
+    nodes.forEach((n1) => {
+      const p1 = posMap.get(n1.id);
+      if (!p1) return;
+
+      nodes.forEach((n2) => {
+        if (n1.id === n2.id) return;
+        const p2 = posMap.get(n2.id);
+        if (!p2) return;
+
+        const dx = p1.x - p2.x;
+        const dy = p1.y - p2.y;
+        const distSq = dx * dx + dy * dy + 100;
+        const dist = Math.sqrt(distSq);
+
+        if (dist < 400) {
+          const force = 3500 / distSq;
+          p1.x += (dx / dist) * force;
+          p1.y += (dy / dist) * force;
+        }
+      });
+    });
+
+    // Attraction along edges (Hooke's law)
+    edges.forEach((e) => {
+      const pSource = posMap.get(e.source_id);
+      const pTarget = posMap.get(e.target_id);
+      if (!pSource || !pTarget) return;
+
+      const dx = pTarget.x - pSource.x;
+      const dy = pTarget.y - pSource.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const desiredDist = 200;
+      const force = (dist - desiredDist) * 0.05;
+
+      pSource.x += (dx / dist) * force;
+      pSource.y += (dy / dist) * force;
+      pTarget.x -= (dx / dist) * force;
+      pTarget.y -= (dy / dist) * force;
+    });
+  }
+
+  return posMap;
+}
+
 export function GraphCanvas({
   nodes,
   edges,
@@ -48,109 +141,29 @@ export function GraphCanvas({
   const [panStart, setPanStart] = React.useState({ x: 0, y: 0 });
 
   // Node position map
-  const [positions, setPositions] = React.useState<Map<string, NodePosition>>(
-    new Map()
+  const [positions, setPositions] = React.useState<Map<string, NodePosition>>(() =>
+    computeAutoLayout(nodes, edges)
   );
+  const [prevProps, setPrevProps] = React.useState({ nodes, edges });
+  if (nodes !== prevProps.nodes || edges !== prevProps.edges) {
+    setPrevProps({ nodes, edges });
+    setPositions(computeAutoLayout(nodes, edges));
+  }
+
   const [draggingNodeId, setDraggingNodeId] = React.useState<string | null>(null);
   const [dragOffset, setDragOffset] = React.useState({ x: 0, y: 0 });
   const hasMovedDuringDrag = React.useRef(false);
 
-  // Auto-layout simulation when nodes or edges change
+  // Initial center fit when nodes or edges change
   React.useEffect(() => {
     if (nodes.length === 0) {
-      setPositions(new Map());
       return;
     }
 
-    const posMap = new Map<string, NodePosition>();
-    const nodeCount = nodes.length;
-
-    // Partition connected nodes vs isolated
-    const connectedNodeIds = new Set<string>();
-    edges.forEach((e) => {
-      connectedNodeIds.add(e.source_id);
-      connectedNodeIds.add(e.target_id);
-    });
-
-    // Initial positioning in rings / grid
-    const cols = Math.max(1, Math.ceil(Math.sqrt(nodeCount)));
-    const spacingX = 260;
-    const spacingY = 140;
-
-    nodes.forEach((node, i) => {
-      if (connectedNodeIds.has(node.id)) {
-        // Spiral / circle around center for connected nodes
-        const angle = (i / Math.max(1, connectedNodeIds.size)) * 2 * Math.PI;
-        const radius = 220 + Math.floor(i / 8) * 120;
-        posMap.set(node.id, {
-          x: 500 + radius * Math.cos(angle),
-          y: 380 + radius * Math.sin(angle),
-          vx: 0,
-          vy: 0,
-        });
-      } else {
-        // Grid array for isolated nodes at the bottom/side
-        const row = Math.floor(i / cols);
-        const col = i % cols;
-        posMap.set(node.id, {
-          x: 100 + col * spacingX,
-          y: 750 + row * spacingY,
-          vx: 0,
-          vy: 0,
-        });
-      }
-    });
-
-    // Run simple force relaxation simulation for 35 iterations
-    const iterations = 35;
-    for (let iter = 0; iter < iterations; iter++) {
-      // Repulsion between connected nodes
-      nodes.forEach((n1) => {
-        const p1 = posMap.get(n1.id);
-        if (!p1) return;
-
-        nodes.forEach((n2) => {
-          if (n1.id === n2.id) return;
-          const p2 = posMap.get(n2.id);
-          if (!p2) return;
-
-          const dx = p1.x - p2.x;
-          const dy = p1.y - p2.y;
-          const distSq = dx * dx + dy * dy + 100;
-          const dist = Math.sqrt(distSq);
-
-          if (dist < 400) {
-            const force = 3500 / distSq;
-            p1.x += (dx / dist) * force;
-            p1.y += (dy / dist) * force;
-          }
-        });
-      });
-
-      // Attraction along edges (Hooke's law)
-      edges.forEach((e) => {
-        const pSource = posMap.get(e.source_id);
-        const pTarget = posMap.get(e.target_id);
-        if (!pSource || !pTarget) return;
-
-        const dx = pTarget.x - pSource.x;
-        const dy = pTarget.y - pSource.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const desiredDist = 200;
-        const force = (dist - desiredDist) * 0.05;
-
-        pSource.x += (dx / dist) * force;
-        pSource.y += (dy / dist) * force;
-        pTarget.x -= (dx / dist) * force;
-        pTarget.y -= (dy / dist) * force;
-      });
-    }
-
-    setPositions(posMap);
-
-    // Initial center fit
-    if (containerRef.current) {
+    const frameId = requestAnimationFrame(() => {
+      if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
+      const posMap = computeAutoLayout(nodes, edges);
       let minX = Infinity;
       let maxX = -Infinity;
       let minY = Infinity;
@@ -179,7 +192,9 @@ export function GraphCanvas({
           scale: autoScale,
         });
       }
-    }
+    });
+
+    return () => cancelAnimationFrame(frameId);
   }, [nodes, edges]);
 
   // Convert screen coordinates to canvas world coordinates

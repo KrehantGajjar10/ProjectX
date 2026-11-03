@@ -58,14 +58,30 @@ export function KnowledgeDetailView({
         }
   );
   const [isLoadingDetail, setIsLoadingDetail] = React.useState(
-    !("tasks" in initialItem)
+    !("tasks" in initialItem) || !initialItem.tasks
   );
+
+  // Sync state if initialItem changes from parent during render
+  const [prevItemId, setPrevItemId] = React.useState(initialItem.id);
+  if (initialItem.id !== prevItemId) {
+    setPrevItemId(initialItem.id);
+    setItem(
+      "tasks" in initialItem && initialItem.tasks
+        ? (initialItem as KnowledgeItemDetailRead)
+        : {
+            ...initialItem,
+            tasks: [],
+            source_dependencies: [],
+            target_dependencies: [],
+          }
+    );
+    setIsLoadingDetail(!("tasks" in initialItem) || !initialItem.tasks);
+  }
 
   // If initialItem is only KnowledgeItemRead, fetch full detail (tasks, dependencies) in background
   React.useEffect(() => {
     let isMounted = true;
     if (!("tasks" in initialItem) || !initialItem.tasks) {
-      setIsLoadingDetail(true);
       fetchKnowledgeDetailClient(projectId, initialItem.id)
         .then((detail) => {
           if (isMounted) {
@@ -80,8 +96,6 @@ export function KnowledgeDetailView({
             setIsLoadingDetail(false);
           }
         });
-    } else {
-      setItem(initialItem as KnowledgeItemDetailRead);
     }
     return () => {
       isMounted = false;

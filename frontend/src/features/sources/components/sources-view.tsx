@@ -31,7 +31,6 @@ import {
   Files,
   FolderPlus,
   HardDrive,
-  Loader2,
   RefreshCw,
   Search,
   Sparkles,

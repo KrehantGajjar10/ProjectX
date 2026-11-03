@@ -12,12 +12,8 @@ import {
   CheckCircle2,
   ExternalLink,
   Focus,
-  GitCommit,
   HelpCircle,
-  Layers,
   Loader2,
-  RefreshCw,
-  Sparkles,
   X,
   XCircle,
 } from "lucide-react";

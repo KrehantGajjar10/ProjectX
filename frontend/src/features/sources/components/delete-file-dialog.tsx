@@ -2,11 +2,9 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { formatFileSize, type SourceRead, type UploadFileDetail } from "@/features/sources/types/source";
 import {
   AlertCircle,
-  AlertTriangle,
   FileText,
   Info,
   Trash2,

@@ -126,23 +126,41 @@ export function AppSidebar({
         {
           label: "Risks",
           icon: ShieldAlert,
-          href: "#",
-          isActive: false,
-          isAvailable: false,
+          href: activeProjectId
+            ? `/app/projects/${activeProjectId}/risks`
+            : undefined,
+          onClick: !activeProjectId ? onOpenCreateProjectModal : undefined,
+          isActive: Boolean(
+            activeProjectId &&
+              pathname.startsWith(`/app/projects/${activeProjectId}/risks`)
+          ),
+          isAvailable: true,
         },
         {
           label: "Timeline",
           icon: Calendar,
-          href: "#",
-          isActive: false,
-          isAvailable: false,
+          href: activeProjectId
+            ? `/app/projects/${activeProjectId}/timeline`
+            : undefined,
+          onClick: !activeProjectId ? onOpenCreateProjectModal : undefined,
+          isActive: Boolean(
+            activeProjectId &&
+              pathname.startsWith(`/app/projects/${activeProjectId}/timeline`)
+          ),
+          isAvailable: true,
         },
         {
           label: "Tasks",
           icon: CheckSquare,
-          href: "#",
-          isActive: false,
-          isAvailable: false,
+          href: activeProjectId
+            ? `/app/projects/${activeProjectId}/tasks`
+            : undefined,
+          onClick: !activeProjectId ? onOpenCreateProjectModal : undefined,
+          isActive: Boolean(
+            activeProjectId &&
+              pathname.startsWith(`/app/projects/${activeProjectId}/tasks`)
+          ),
+          isAvailable: true,
         },
       ],
     },
@@ -271,7 +289,9 @@ export function AppSidebar({
                     type="button"
                     onClick={() => {
                       onNavigate?.();
-                      item.onClick?.();
+                      if ("onClick" in item) {
+                        item.onClick?.();
+                      }
                     }}
                     className="w-full flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors text-muted-foreground hover:bg-surface hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
@@ -279,7 +299,7 @@ export function AppSidebar({
                       <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span>{item.label}</span>
                     </span>
-                    {item.badge && (
+                    {"badge" in item && item.badge && (
                       <span className="text-[10px] font-mono text-primary bg-primary/10 px-1.5 py-0.2 rounded border border-primary/20">
                         {item.badge}
                       </span>

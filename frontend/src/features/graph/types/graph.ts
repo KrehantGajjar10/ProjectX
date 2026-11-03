@@ -53,7 +53,10 @@ export interface Neo4jSyncResponse {
   details?: Record<string, unknown>;
 }
 
+export type GraphCategoryFilter = KnowledgeCategory | "all";
+export type GraphReviewStatusFilter = "all" | "verified" | "unverified" | "rejected" | KnowledgeReviewStatus;
+
 export interface GraphFilterOptions {
-  category?: KnowledgeCategory | "all";
-  review_status?: KnowledgeReviewStatus | "all";
+  category?: GraphCategoryFilter;
+  review_status?: GraphReviewStatusFilter;
 }

@@ -2,13 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { ProjectDetailRead } from "@/types/project";
 import type {
   DependencyGraphResponse,
+  GraphCategoryFilter,
   GraphFinding,
   GraphNode,
+  GraphReviewStatusFilter,
   SubgraphResponse,
 } from "../types/graph";
 import {
@@ -21,16 +23,12 @@ import { GraphFindingsPanel } from "./graph-findings-panel";
 import { Neo4jSyncModal } from "./neo4j-sync-modal";
 import {
   AlertCircle,
-  ArrowLeft,
-  CheckCircle2,
   Database,
   Filter,
   Focus,
-  Layers,
   Loader2,
   Network,
   RefreshCw,
-  Sparkles,
   X,
 } from "lucide-react";
 
@@ -57,8 +55,8 @@ export function DependencyGraphView({
   const [error, setError] = React.useState<string | null>(null);
 
   // Filters
-  const [selectedCategory, setSelectedCategory] = React.useState<string>("all");
-  const [selectedReviewStatus, setSelectedReviewStatus] = React.useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = React.useState<GraphCategoryFilter>("all");
+  const [selectedReviewStatus, setSelectedReviewStatus] = React.useState<GraphReviewStatusFilter>("all");
 
   // Selection & Inspector State
   const [selectedNode, setSelectedNode] = React.useState<GraphNode | null>(null);
@@ -88,15 +86,18 @@ export function DependencyGraphView({
 
   // Load Graph Data
   const loadGraph = React.useCallback(
-    async (cat = selectedCategory, status = selectedReviewStatus) => {
+    async (
+      cat: GraphCategoryFilter = selectedCategory,
+      status: GraphReviewStatusFilter = selectedReviewStatus
+    ) => {
       setIsLoading(true);
       setError(null);
       setIsolatedSubgraph(null);
 
       try {
         const res = await clientGetProjectGraph(project.id, {
-          category: cat as any,
-          review_status: status as any,
+          category: cat,
+          review_status: status,
         });
         setGraphData(res);
       } catch (err) {
@@ -228,8 +229,9 @@ export function DependencyGraphView({
           <select
             value={selectedCategory}
             onChange={(e) => {
-              setSelectedCategory(e.target.value);
-              loadGraph(e.target.value, selectedReviewStatus);
+              const val = e.target.value as GraphCategoryFilter;
+              setSelectedCategory(val);
+              loadGraph(val, selectedReviewStatus);
             }}
             className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
           >
@@ -245,8 +247,9 @@ export function DependencyGraphView({
           <select
             value={selectedReviewStatus}
             onChange={(e) => {
-              setSelectedReviewStatus(e.target.value);
-              loadGraph(selectedCategory, e.target.value);
+              const val = e.target.value as GraphReviewStatusFilter;
+              setSelectedReviewStatus(val);
+              loadGraph(selectedCategory, val);
             }}
             className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
           >

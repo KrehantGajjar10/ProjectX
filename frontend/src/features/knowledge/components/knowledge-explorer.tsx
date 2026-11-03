@@ -59,9 +59,24 @@ export function KnowledgeExplorer({
   >("all");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [isRefreshing, setIsRefreshing] = React.useState(false);
-  const [selectedItem, setSelectedItem] = React.useState<KnowledgeItemRead | null>(
-    null
-  );
+  const itemIdParam = searchParams.get("item");
+  const [selectedItem, setSelectedItem] = React.useState<KnowledgeItemRead | null>(() => {
+    if (itemIdParam) {
+      return initialItems.find((i) => i.id === itemIdParam) || null;
+    }
+    return null;
+  });
+
+  const [prevItemIdParam, setPrevItemIdParam] = React.useState(itemIdParam);
+  if (itemIdParam !== prevItemIdParam) {
+    setPrevItemIdParam(itemIdParam);
+    if (itemIdParam) {
+      const match = items.find((i) => i.id === itemIdParam);
+      if (match) {
+        setSelectedItem(match);
+      }
+    }
+  }
   const [activeJob, setActiveJob] = React.useState<IngestionJobRead | null>(null);
 
   // Check for active ingestion jobs on mount
@@ -86,16 +101,7 @@ export function KnowledgeExplorer({
     };
   }, [project.id]);
 
-  // Sync selected item from URL searchParams ?item=<id> if present
-  React.useEffect(() => {
-    const itemIdParam = searchParams.get("item");
-    if (itemIdParam) {
-      const match = items.find((i) => i.id === itemIdParam);
-      if (match) {
-        setSelectedItem(match);
-      }
-    }
-  }, [searchParams, items]);
+
 
   const refreshList = React.useCallback(
     async (overrideFilters?: Partial<KnowledgeFilterOptions>) => {
