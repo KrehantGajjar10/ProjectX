@@ -13,6 +13,7 @@ import {
   Calendar,
   ChevronDown,
   ChevronUp,
+  ExternalLink,
   FolderGit2,
   GitBranch,
   HardDrive,
@@ -254,12 +255,45 @@ export function SourceCard({
         )}
 
         {/* For GitHub Sources */}
-        {!isUploadType && parsedConfig?.repo_url && (
-          <div className="rounded-lg border border-border/70 bg-surface/40 p-3 text-xs space-y-1 font-mono">
-            <div className="text-muted-foreground">Repository URL:</div>
-            <div className="text-foreground font-semibold truncate">
-              {parsedConfig.repo_url}
+        {!isUploadType && (
+          <div className="rounded-lg border border-border/70 bg-surface/40 p-3.5 text-xs space-y-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="space-y-0.5 min-w-0">
+                <span className="text-[11px] text-muted-foreground font-mono uppercase tracking-wider block">
+                  Repository URL
+                </span>
+                {parsedConfig?.repo_url ? (
+                  <a
+                    href={
+                      parsedConfig.repo_url.startsWith("http")
+                        ? parsedConfig.repo_url
+                        : `https://github.com/${parsedConfig.repo_url}`
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-foreground hover:text-primary transition-colors truncate max-w-full"
+                  >
+                    <span className="truncate">{parsedConfig.repo_url}</span>
+                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  </a>
+                ) : (
+                  <span className="font-mono text-muted-foreground italic">
+                    Not configured
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="inline-flex items-center gap-1 rounded bg-violet/10 px-2 py-0.5 text-xs font-mono font-medium text-violet border border-violet/20">
+                  <GitBranch className="h-3 w-3" />
+                  <span>{parsedConfig?.branch || "main"}</span>
+                </span>
+              </div>
             </div>
+
+            <p className="text-[11px] text-muted-foreground leading-relaxed pt-1 border-t border-border/50">
+              GitHub repository connected as a project knowledge source. Run &ldquo;Ingest Knowledge&rdquo; to extract specifications, code structure, and evidence-grounded artifacts.
+            </p>
           </div>
         )}
       </CardContent>

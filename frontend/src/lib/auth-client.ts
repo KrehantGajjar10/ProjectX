@@ -7,12 +7,14 @@ import type {
 export class AuthClientError extends Error {
   code: string;
   details?: unknown;
+  statusCode: number;
 
   constructor(code: string, message: string, details?: unknown) {
     super(message);
     this.name = "AuthClientError";
     this.code = code;
     this.details = details;
+    this.statusCode = 0;
   }
 }
 

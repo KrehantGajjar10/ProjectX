@@ -30,6 +30,18 @@ export interface UploadSourceResponse {
   files: UploadFileDetail[];
 }
 
+export interface GitHubSourceCreateInput {
+  repo_url: string;
+  branch?: string | null;
+  name?: string | null;
+}
+
+export function canConnectGitHub(role?: string | null): boolean {
+  if (!role) return false;
+  const normalized = role.toLowerCase();
+  return normalized === "owner" || normalized === "admin";
+}
+
 export const ALLOWED_UPLOAD_EXTENSIONS = [
   ".pdf",
   ".md",

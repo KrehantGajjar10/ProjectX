@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { SourceCard } from "@/features/sources/components/source-card";
 import { SourceUploadDialog } from "@/features/sources/components/source-upload-dialog";
+import { GitHubSourceDialog } from "@/features/sources/components/github-source-dialog";
 import { DeleteSourceDialog } from "@/features/sources/components/delete-source-dialog";
 import { DeleteFileDialog } from "@/features/sources/components/delete-file-dialog";
 import {
@@ -15,6 +16,7 @@ import {
 } from "@/features/sources/lib/sources-client";
 import {
   formatFileSize,
+  canConnectGitHub,
   type SourceRead,
   type UploadFileDetail,
   type UploadSourceResponse,
@@ -29,6 +31,7 @@ import {
   FileCode,
   FileText,
   Files,
+  FolderGit2,
   FolderPlus,
   HardDrive,
   RefreshCw,
@@ -63,7 +66,24 @@ export function SourcesView({ project, initialSources }: SourcesViewProps) {
   const [sources, setSources] = React.useState<SourceRead[]>(initialSources);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [uploadDialogOpen, setUploadDialogOpen] = React.useState(false);
+  const [githubDialogOpen, setGithubDialogOpen] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+
+  // GitHub Connection Success state
+  const [githubSuccessNotice, setGithubSuccessNotice] = React.useState<
+    string | null
+  >(null);
+  const githubNoticeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (githubNoticeTimerRef.current) {
+        clearTimeout(githubNoticeTimerRef.current);
+      }
+    };
+  }, []);
+
+  const canConnect = canConnectGitHub(project.my_role);
 
   // Whole Source Deletion Dialog state
   const [sourceToDelete, setSourceToDelete] = React.useState<SourceRead | null>(
@@ -182,6 +202,21 @@ export function SourcesView({ project, initialSources }: SourcesViewProps) {
         setPersistenceNotice(null);
       }
     }
+  };
+
+  const handleGitHubConnected = async (source: SourceRead) => {
+    // 1. Refresh sources from authoritative backend
+    await refreshSources();
+
+    // 2. Show success toast notification
+    setGithubSuccessNotice(`GitHub repository "${source.name}" successfully connected.`);
+    if (githubNoticeTimerRef.current) {
+      clearTimeout(githubNoticeTimerRef.current);
+    }
+    githubNoticeTimerRef.current = setTimeout(() => {
+      setGithubSuccessNotice(null);
+      githubNoticeTimerRef.current = null;
+    }, 5000);
   };
 
   const handleTriggerIngestion = async (source: SourceRead) => {
@@ -322,7 +357,7 @@ export function SourcesView({ project, initialSources }: SourcesViewProps) {
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-2.5 self-start sm:self-auto shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto shrink-0">
           <button
             type="button"
             onClick={() => refreshSources()}
@@ -334,6 +369,21 @@ export function SourcesView({ project, initialSources }: SourcesViewProps) {
               className={`h-4 w-4 ${isRefreshing ? "animate-spin text-primary" : ""}`}
             />
           </button>
+
+          <Button
+            variant="outline"
+            onClick={() => setGithubDialogOpen(true)}
+            disabled={!canConnect}
+            title={
+              canConnect
+                ? "Connect a GitHub repository to project knowledge sources"
+                : "Admin or Owner role is required to connect GitHub repositories"
+            }
+            className="gap-2 font-medium"
+          >
+            <FolderGit2 className="h-4 w-4 text-violet" />
+            Connect GitHub
+          </Button>
 
           <Button
             onClick={() => setUploadDialogOpen(true)}
@@ -448,6 +498,27 @@ export function SourcesView({ project, initialSources }: SourcesViewProps) {
         </div>
       )}
 
+      {/* GitHub Connection Success Banner */}
+      {githubSuccessNotice && (
+        <div
+          role="status"
+          className="flex items-center justify-between rounded-xl border border-emerald/30 bg-emerald/10 p-3.5 text-xs text-emerald animate-in fade-in-50"
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span className="font-medium">{githubSuccessNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setGithubSuccessNotice(null)}
+            className="text-emerald hover:opacity-80 p-0.5 rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald"
+            aria-label="Dismiss message"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         <div className="rounded-xl border border-border/80 bg-card p-3.5 flex items-center justify-between">
@@ -510,6 +581,21 @@ export function SourcesView({ project, initialSources }: SourcesViewProps) {
           </p>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setGithubDialogOpen(true)}
+              disabled={!canConnect}
+              title={
+                canConnect
+                  ? "Connect a GitHub repository to project knowledge sources"
+                  : "Admin or Owner role is required to connect GitHub repositories"
+              }
+              className="gap-2 font-medium"
+            >
+              <FolderGit2 className="h-4 w-4 text-violet" />
+              Connect GitHub
+            </Button>
+
             <Button
               onClick={() => setUploadDialogOpen(true)}
               className="gap-2 font-medium"
@@ -596,6 +682,14 @@ export function SourcesView({ project, initialSources }: SourcesViewProps) {
         isOpen={uploadDialogOpen}
         onClose={() => setUploadDialogOpen(false)}
         onUploadSuccess={handleUploadSuccess}
+      />
+
+      {/* GitHub Connection Dialog */}
+      <GitHubSourceDialog
+        projectId={project.id}
+        isOpen={githubDialogOpen}
+        onClose={() => setGithubDialogOpen(false)}
+        onConnected={handleGitHubConnected}
       />
 
       {/* Whole Source Deletion Dialog */}
