@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ProjectX Frontend
+
+The Next.js 16 (React 19, Tailwind CSS v4) user interface and web application for **ProjectX (Capture. Understand. Handover.)**.
+
+For full platform architecture, setup guides, and system documentation, please refer to the primary repository [README.md](file:///home/aniketbhil/ProjectX/README.md).
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### 1. Prerequisites
+- Node.js 20+
+- npm (or pnpm / bun)
+- ProjectX Backend running at `http://localhost:8000` (or configured via `PROJECTX_API_BASE_URL`)
 
+### 2. Install Dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. Run Development Server
+```bash
+npm run dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Open [http://localhost:3000](http://localhost:3000) with your browser.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Build for Production
+```bash
+npm run build
+npm run start
+```
 
-## Learn More
+### 5. Linting
+```bash
+npm run lint
+```
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Architecture & Feature Modules
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The frontend is structured into domain features located under `src/features/`:
 
-## Deploy on Vercel
+- `sources`: Multi-format drag-and-drop file upload dialogs and GitHub repository connection wizards.
+- `knowledge`: Knowledge item explorer with status filters, confidence tags, and evidence drawer.
+- `search`: Grounded Contextual Q&A interface with verifiable inline citation pills and source previews.
+- `graph`: Interactive dependency graph canvas with cycle detection and blocked paths.
+- `risks`: Project risk analytics matrix, SPOK (Single Point of Knowledge) indicators, and mitigation trackers.
+- `tasks`: Interactive task boards with blocking dependencies.
+- `timeline`: Chronological milestone and key decision timeline view.
+- `handover`: Handover Studio for generating 10-section continuation plans, side-by-side diffing, reviewer sign-offs, and PDF/Word/Markdown exports.
+- `activity`: Cryptographic immutable audit feed.
+- `settings`: Project configuration and team member RBAC management.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+Licensed under the [MIT License](file:///home/aniketbhil/ProjectX/LICENSE).
