@@ -71,6 +71,15 @@ export function TasksView({
 
   // Success Notification
   const [successToast, setSuccessToast] = React.useState<string | null>(null);
+  const toastTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const fetchTasks = React.useCallback(
     async (
@@ -127,7 +136,13 @@ export function TasksView({
 
     // 4. Show success message
     setSuccessToast(`Task "${updated.title}" successfully updated.`);
-    setTimeout(() => setSuccessToast(null), 4000);
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = setTimeout(() => {
+      setSuccessToast(null);
+      toastTimeoutRef.current = null;
+    }, 4000);
   };
 
   // Client-side text search filter

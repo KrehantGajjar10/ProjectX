@@ -16,7 +16,36 @@ import {
   XCircle,
 } from "lucide-react";
 
-const emptySubscribe = () => () => {};
+// Module-level timestamp cache and subscriber set to provide a referentially
+// stable snapshot to useSyncExternalStore and prevent infinite re-renders in React 19.
+let cachedCurrentTime = typeof window !== "undefined" ? Date.now() : 0;
+const timeSubscribers = new Set<() => void>();
+let timerId: ReturnType<typeof setInterval> | null = null;
+
+function subscribeCurrentTime(callback: () => void) {
+  timeSubscribers.add(callback);
+  if (timeSubscribers.size === 1 && typeof window !== "undefined") {
+    timerId = setInterval(() => {
+      cachedCurrentTime = Date.now();
+      timeSubscribers.forEach((notify) => notify());
+    }, 60000);
+  }
+  return () => {
+    timeSubscribers.delete(callback);
+    if (timeSubscribers.size === 0 && timerId) {
+      clearInterval(timerId);
+      timerId = null;
+    }
+  };
+}
+
+function getCurrentTimeSnapshot(): number {
+  return cachedCurrentTime;
+}
+
+function getServerTimeSnapshot(): number {
+  return 0;
+}
 
 interface TaskCardProps {
   task: TaskRead;
@@ -115,9 +144,9 @@ export function TaskCard({
 
   // Due date & overdue check via external store to avoid purity/hydration issues
   const currentTime = React.useSyncExternalStore(
-    emptySubscribe,
-    () => Date.now(),
-    () => 0
+    subscribeCurrentTime,
+    getCurrentTimeSnapshot,
+    getServerTimeSnapshot
   );
 
   const isOverdue = React.useMemo(() => {

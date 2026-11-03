@@ -183,16 +183,28 @@ export function AppSidebar({
         {
           label: "Activity",
           icon: Activity,
-          href: "#",
-          isActive: false,
-          isAvailable: false,
+          href: activeProjectId
+            ? `/app/projects/${activeProjectId}/activity`
+            : undefined,
+          onClick: !activeProjectId ? onOpenCreateProjectModal : undefined,
+          isActive: Boolean(
+            activeProjectId &&
+              pathname.startsWith(`/app/projects/${activeProjectId}/activity`)
+          ),
+          isAvailable: true,
         },
         {
           label: "Settings",
           icon: Settings,
-          href: "#",
-          isActive: false,
-          isAvailable: false,
+          href: activeProjectId
+            ? `/app/projects/${activeProjectId}/settings`
+            : undefined,
+          onClick: !activeProjectId ? onOpenCreateProjectModal : undefined,
+          isActive: Boolean(
+            activeProjectId &&
+              pathname.startsWith(`/app/projects/${activeProjectId}/settings`)
+          ),
+          isAvailable: true,
         },
       ],
     },
