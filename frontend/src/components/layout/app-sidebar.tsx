@@ -170,9 +170,15 @@ export function AppSidebar({
         {
           label: "Handover",
           icon: FileCheck2,
-          href: "#",
-          isActive: false,
-          isAvailable: false,
+          href: activeProjectId
+            ? `/app/projects/${activeProjectId}/handover`
+            : undefined,
+          onClick: !activeProjectId ? onOpenCreateProjectModal : undefined,
+          isActive: Boolean(
+            activeProjectId &&
+              pathname.startsWith(`/app/projects/${activeProjectId}/handover`)
+          ),
+          isAvailable: true,
         },
         {
           label: "Activity",
