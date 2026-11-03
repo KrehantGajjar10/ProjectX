@@ -53,7 +53,18 @@ class PdfProcessor(BaseFileProcessor):
         full_raw_text = "\n\n--- Page Break ---\n\n".join(raw_pages)
 
         doc_meta = metadata.copy() if metadata else {}
-        doc_meta.update({"total_pages": total_pages})
+        total_extracted_chars = sum(len(s.content) for s in sections)
+        has_text = total_extracted_chars > 0
+        doc_meta.update({
+            "total_pages": total_pages,
+            "has_extractable_text": has_text,
+            "extracted_character_count": total_extracted_chars,
+        })
+        if not has_text:
+            doc_meta["warning"] = (
+                f"PDF '{doc_title}' has {total_pages} page(s) but produced 0 extractable text characters "
+                "(likely scanned images or bitmap without embedded text layer)."
+            )
 
         return ProcessedDocument(
             title=doc_title,

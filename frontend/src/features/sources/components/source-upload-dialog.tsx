@@ -2,14 +2,20 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { FileDropzone } from "@/features/sources/components/file-dropzone";
 import { SelectedFileList } from "@/features/sources/components/selected-file-list";
-import { uploadSourcesClient } from "@/features/sources/lib/sources-client";
+import {
+  startIngestionJobClient,
+  getIngestionJobStatusClient,
+  uploadSourcesClient,
+} from "@/features/sources/lib/sources-client";
 import {
   isAllowedExtension,
   MAX_UPLOAD_SIZE_BYTES,
   type UploadSourceResponse,
 } from "@/features/sources/types/source";
+import type { IngestionJobRead } from "@/features/sources/types/ingestion";
 import { AuthClientError } from "@/lib/auth-client";
 import {
   AlertCircle,
@@ -17,6 +23,7 @@ import {
   FolderUp,
   Info,
   Loader2,
+  Sparkles,
   X,
 } from "lucide-react";
 
@@ -27,6 +34,8 @@ interface SourceUploadDialogProps {
   onUploadSuccess: (response: UploadSourceResponse) => void;
 }
 
+type DialogStage = "select" | "uploading" | "ingesting" | "completed" | "failed";
+
 export function SourceUploadDialog({
   projectId,
   isOpen,
@@ -34,36 +43,64 @@ export function SourceUploadDialog({
   onUploadSuccess,
 }: SourceUploadDialogProps) {
   const [stagedFiles, setStagedFiles] = React.useState<File[]>([]);
-  const [isUploading, setIsUploading] = React.useState(false);
+  const [stage, setStage] = React.useState<DialogStage>("select");
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [successInfo, setSuccessInfo] = React.useState<{
     count: number;
   } | null>(null);
+  const [ingestionJob, setIngestionJob] = React.useState<IngestionJobRead | null>(
+    null
+  );
 
-  const resetDialog = React.useCallback(() => {
-    setStagedFiles([]);
-    setIsUploading(false);
-    setErrorMessage(null);
-    setSuccessInfo(null);
+  const pollTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const uploadResultRef = React.useRef<UploadSourceResponse | null>(null);
+
+  const clearPollTimer = React.useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
   }, []);
 
+  const resetDialog = React.useCallback(() => {
+    clearPollTimer();
+    setStagedFiles([]);
+    setStage("select");
+    setErrorMessage(null);
+    setSuccessInfo(null);
+    setIngestionJob(null);
+    uploadResultRef.current = null;
+  }, [clearPollTimer]);
+
   const handleClose = React.useCallback(() => {
-    if (!isUploading) {
+    if (stage !== "uploading") {
+      clearPollTimer();
+      // If upload finished while ingesting in background, notify parent
+      if (uploadResultRef.current) {
+        onUploadSuccess(uploadResultRef.current);
+      }
       resetDialog();
       onClose();
     }
-  }, [isUploading, resetDialog, onClose]);
+  }, [stage, clearPollTimer, onUploadSuccess, resetDialog, onClose]);
 
   // Handle ESC key
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen && !isUploading) {
+      if (e.key === "Escape" && isOpen && stage !== "uploading") {
         handleClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, isUploading, handleClose]);
+  }, [isOpen, stage, handleClose]);
+
+  // Clean up timer on unmount
+  React.useEffect(() => {
+    return () => {
+      clearPollTimer();
+    };
+  }, [clearPollTimer]);
 
   if (!isOpen) return null;
 
@@ -96,35 +133,83 @@ export function SourceUploadDialog({
     (f) => !isAllowedExtension(f.name) || f.size > MAX_UPLOAD_SIZE_BYTES
   );
 
-  const canSubmit = stagedFiles.length > 0 && !hasInvalidFiles && !isUploading;
+  const canSubmit =
+    stagedFiles.length > 0 && !hasInvalidFiles && stage === "select";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
 
     setErrorMessage(null);
-    setIsUploading(true);
+    setStage("uploading");
 
     try {
+      // Step 1: Upload the selected documents
       const result = await uploadSourcesClient(projectId, stagedFiles);
+      uploadResultRef.current = result;
       setSuccessInfo({ count: stagedFiles.length });
       setStagedFiles([]);
 
-      // Inform parent view to refresh source list
-      onUploadSuccess(result);
+      // Step 2: Trigger automatic ingestion job for the uploaded source
+      setStage("ingesting");
+      try {
+        const job = await startIngestionJobClient(projectId, [
+          result.source.id,
+        ]);
+        setIngestionJob(job);
 
-      // Auto close after brief display
-      setTimeout(() => {
-        handleClose();
-      }, 1400);
+        // Step 3: Poll ingestion job status until complete or failed
+        pollTimerRef.current = setInterval(async () => {
+          try {
+            const currentJob = await getIngestionJobStatusClient(
+              projectId,
+              job.id
+            );
+            setIngestionJob(currentJob);
+
+            if (currentJob.status === "completed") {
+              clearPollTimer();
+              setStage("completed");
+              onUploadSuccess(result);
+
+              // Auto close dialog after brief success presentation
+              setTimeout(() => {
+                handleClose();
+              }, 1800);
+            } else if (currentJob.status === "failed") {
+              clearPollTimer();
+              setStage("failed");
+              setErrorMessage(
+                currentJob.error ||
+                  "Ingestion job failed during processing. Check logs for details."
+              );
+              onUploadSuccess(result);
+            }
+          } catch (pollErr) {
+            console.error("Error polling ingestion status:", pollErr);
+          }
+        }, 2000);
+      } catch (ingestionErr) {
+        // If starting ingestion job failed, notify parent about upload but show ingestion start error
+        onUploadSuccess(result);
+        setStage("failed");
+        setErrorMessage(
+          ingestionErr instanceof Error
+            ? `Documents uploaded to storage, but automatic ingestion failed to enqueue: ${ingestionErr.message}`
+            : "Failed to enqueue ingestion job."
+        );
+      }
     } catch (err) {
+      setStage("select");
       if (err instanceof AuthClientError) {
         setErrorMessage(err.message);
       } else {
-        setErrorMessage("An unexpected network error occurred during upload.");
+        setErrorMessage(
+          err instanceof Error
+            ? err.message
+            : "An unexpected network error occurred during upload."
+        );
       }
-    } finally {
-      setIsUploading(false);
     }
   };
 
@@ -139,7 +224,7 @@ export function SourceUploadDialog({
       <div
         className="fixed inset-0 -z-10"
         onClick={() => {
-          if (!isUploading) handleClose();
+          if (stage !== "uploading") handleClose();
         }}
       />
 
@@ -166,9 +251,9 @@ export function SourceUploadDialog({
           <button
             type="button"
             onClick={handleClose}
-            disabled={isUploading}
+            disabled={stage === "uploading"}
             aria-label="Close upload dialog"
-            className="rounded-md p-1.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+            className="rounded-md p-1.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors disabled:opacity-50"
           >
             <X className="h-4 w-4" />
           </button>
@@ -185,69 +270,128 @@ export function SourceUploadDialog({
           </div>
         )}
 
-        {successInfo && (
+        {/* Ingestion in Progress Stage */}
+        {stage === "ingesting" && (
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3 animate-in fade-in-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+                <span className="text-xs font-semibold text-foreground">
+                  Ingestion & Knowledge Extraction
+                </span>
+              </div>
+              <Badge
+                variant={
+                  ingestionJob?.status === "processing" ? "emerald" : "copper"
+                }
+                className="text-[10px] uppercase font-mono tracking-wider"
+              >
+                {ingestionJob?.status || "queued"}
+              </Badge>
+            </div>
+
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {ingestionJob?.status === "queued"
+                ? "Job queued in database. Waiting for ingestion worker to claim..."
+                : "Parsing documents, generating semantic chunks, and extracting grounded knowledge..."}
+            </p>
+
+            {/* Progress bar */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[11px] font-mono text-muted-foreground">
+                <span>Extraction Progress</span>
+                <span>{ingestionJob?.progress || 0}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-surface border border-border/60">
+                <div
+                  className="h-full bg-primary transition-all duration-300"
+                  style={{ width: `${Math.max(5, ingestionJob?.progress || 0)}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleClose}
+                className="text-xs"
+              >
+                Continue in Background
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Completed Stage */}
+        {stage === "completed" && (
           <div
             role="status"
             className="flex items-start gap-2.5 rounded-lg border border-emerald/30 bg-emerald/10 p-3 text-xs text-emerald animate-in fade-in-50"
           >
             <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
             <span className="leading-relaxed">
-              Successfully uploaded {successInfo.count} document(s). Source list updated.
+              Successfully uploaded and ingested {successInfo?.count || 1} document(s). Knowledge records extracted!
             </span>
           </div>
         )}
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <FileDropzone
-            onFilesSelected={handleFilesSelected}
-            disabled={isUploading}
-          />
+        {/* Form Body (Visible when selecting or uploading) */}
+        {stage !== "ingesting" && stage !== "completed" && (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <FileDropzone
+              onFilesSelected={handleFilesSelected}
+              disabled={stage === "uploading"}
+            />
 
-          <SelectedFileList
-            files={stagedFiles}
-            onRemoveFile={handleRemoveFile}
-            onClearAll={handleClearAll}
-            disabled={isUploading}
-          />
+            <SelectedFileList
+              files={stagedFiles}
+              onRemoveFile={handleRemoveFile}
+              onClearAll={handleClearAll}
+              disabled={stage === "uploading"}
+            />
 
-          {/* Scope Note */}
-          <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-surface/40 p-2.5 text-[11px] text-muted-foreground leading-relaxed">
-            <Info className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
-            <span>
-              Uploaded documents are securely saved to project storage. Source ingestion, chunking, and knowledge extraction will be triggered in the ingestion pipeline.
-            </span>
-          </div>
+            {/* Scope Note */}
+            <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-surface/40 p-2.5 text-[11px] text-muted-foreground leading-relaxed">
+              <Info className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+              <span>
+                Uploaded documents are saved to project storage and automatically enqueued for AI extraction and evidence verification.
+              </span>
+            </div>
 
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border/70">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleClose}
-              disabled={isUploading}
-            >
-              Cancel
-            </Button>
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border/70">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleClose}
+                disabled={stage === "uploading"}
+              >
+                Cancel
+              </Button>
 
-            <Button
-              type="submit"
-              size="sm"
-              disabled={!canSubmit}
-              className="gap-1.5 font-medium min-w-32.5"
-            >
-              {isUploading ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Uploading...
-                </>
-              ) : (
-                `Upload ${stagedFiles.length > 0 ? `(${stagedFiles.length})` : "Files"}`
-              )}
-            </Button>
-          </div>
-        </form>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!canSubmit}
+                className="gap-1.5 font-medium min-w-32.5"
+              >
+                {stage === "uploading" ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  `Upload & Ingest ${
+                    stagedFiles.length > 0 ? `(${stagedFiles.length})` : ""
+                  }`
+                )}
+              </Button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

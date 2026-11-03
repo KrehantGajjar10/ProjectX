@@ -16,6 +16,8 @@ import {
   FolderGit2,
   GitBranch,
   HardDrive,
+  Loader2,
+  Sparkles,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -24,12 +26,18 @@ interface SourceCardProps {
   source: SourceRead;
   filterQuery?: string;
   onDeleteClick?: (source: SourceRead) => void;
+  onDeleteFileClick?: (source: SourceRead, file: UploadFileDetail) => void;
+  onTriggerIngestion?: (source: SourceRead) => void;
+  isIngesting?: boolean;
 }
 
 export function SourceCard({
   source,
   filterQuery = "",
   onDeleteClick,
+  onDeleteFileClick,
+  onTriggerIngestion,
+  isIngesting = false,
 }: SourceCardProps) {
   const [isExpanded, setIsExpanded] = React.useState(true);
 
@@ -122,6 +130,28 @@ export function SourceCard({
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+            {onTriggerIngestion && (
+              <button
+                type="button"
+                onClick={() => onTriggerIngestion(source)}
+                disabled={isIngesting}
+                className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/90 px-2.5 py-1 rounded-md border border-primary/30 bg-primary/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                title="Run background ingestion and knowledge extraction for this source"
+              >
+                {isIngesting ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Ingesting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3 w-3" />
+                    <span>Ingest Knowledge</span>
+                  </>
+                )}
+              </button>
+            )}
+
             {isUploadType && files.length > 0 && (
               <button
                 type="button"
@@ -192,9 +222,24 @@ export function SourceCard({
                           {file.mime_type.split("/")[1] || file.mime_type}
                         </span>
 
-                        <span className="font-mono text-[11px] font-medium text-foreground min-w-[55px]">
+                        <span className="font-mono text-[11px] font-medium text-foreground min-w-13.75">
                           {formatFileSize(file.size)}
                         </span>
+
+                        {onDeleteFileClick && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteFileClick(source, file);
+                            }}
+                            className="inline-flex items-center justify-center h-6 w-6 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            title={`Delete file ${file.filename}`}
+                            aria-label={`Delete file ${file.filename}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))

@@ -72,7 +72,7 @@ class ExtractionService:
 
     async def extract_chunk_items(
         self, chunk: DocumentChunk, file_path: str
-    ) -> list[tuple[ExtractedItem, bool, float, str]]:
+    ) -> tuple[list[tuple[ExtractedItem, bool, float, str]], Exception | None]:
         """Invokes Gemini to extract knowledge items from a single chunk and verifies each excerpt."""
         try:
             result = await self.gemini.extract_knowledge(
@@ -81,10 +81,11 @@ class ExtractionService:
                 location_info=chunk.location_info,
             )
         except Exception as exc:
-            logger.error("Gemini extraction error on chunk %s: %s", chunk.id, exc)
-            return []
+            logger.error("Gemini extraction error on chunk %s (%s): %s", chunk.id, file_path, exc)
+            return [], exc
 
         verified_items: list[tuple[ExtractedItem, bool, float, str]] = []
+        total_returned = len(result.items)
 
         for item in result.items:
             # Programmatically verify evidence excerpt
@@ -94,7 +95,27 @@ class ExtractionService:
             )
             verified_items.append((item, is_verified, match_score, verified_excerpt))
 
-        return verified_items
+        passed_count = sum(1 for _, v, _, _ in verified_items if v)
+        failed_count = total_returned - passed_count
+
+        reasons = []
+        for item, is_verified, score, _ in verified_items:
+            if not is_verified:
+                reasons.append(
+                    f"'{item.title}': excerpt not found verbatim or fuzzy in chunk (score: {score:.2f})"
+                )
+
+        logger.info(
+            "Chunk %s (%s): Gemini returned %d items. Passed verification: %d, Unverified (saved & flagged): %d. %s",
+            chunk.id,
+            file_path,
+            total_returned,
+            passed_count,
+            failed_count,
+            f"Reasons: {'; '.join(reasons)}" if reasons else "All items verified.",
+        )
+
+        return verified_items, None
 
     async def process_project_extraction(
         self,
@@ -152,6 +173,8 @@ class ExtractionService:
         # 2. Extract per chunk with bounded concurrency
         batch_size = settings.EXTRACTION_BATCH_SIZE
         all_raw_extractions: list[tuple[DocumentChunk, ExtractedItem, bool, float, str]] = []
+        chunk_errors: list[dict[str, Any]] = []
+        successful_chunks: set[DocumentChunk] = set()
 
         for i in range(0, total_chunks, batch_size):
             batch = unextracted_chunks[i : i + batch_size]
@@ -160,8 +183,15 @@ class ExtractionService:
             ]
             batch_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            for (chunk, _), items_res in zip(batch, batch_results, strict=False):
-                if isinstance(items_res, list):
+            for (chunk, fpath), res in zip(batch, batch_results, strict=False):
+                if isinstance(res, Exception):
+                    chunk_errors.append({"chunk_id": str(chunk.id), "file_path": fpath, "error": str(res)})
+                elif isinstance(res, tuple):
+                    items_res, exc = res
+                    if exc:
+                        chunk_errors.append({"chunk_id": str(chunk.id), "file_path": fpath, "error": str(exc)})
+                    else:
+                        successful_chunks.add(chunk)
                     for item, is_verified, match_score, excerpt in items_res:
                         all_raw_extractions.append((chunk, item, is_verified, match_score, excerpt))
 
@@ -346,23 +376,27 @@ class ExtractionService:
                 )
                 db.add(dep_edge)
 
-        # 6. Mark chunks as extracted with the current version
-        for chunk, _ in unextracted_chunks:
+        # 6. Mark successful chunks as extracted with the current version
+        for chunk in successful_chunks:
             chunk.extraction_version = settings.EXTRACTION_VERSION
 
         await db.flush()
 
         logger.info(
-            "Extraction completed for project %s: %d items created, %d evidences merged, %d gaps, %d conflicts",
+            "Extraction completed for project %s: %d items created, %d evidences merged, %d gaps, %d conflicts, %d failed chunks",
             project_id,
             items_created,
             evidences_merged,
             gaps_flagged,
             conflicts_flagged,
+            len(chunk_errors),
         )
 
         return {
-            "extracted_chunks": total_chunks,
+            "total_chunks": total_chunks,
+            "extracted_chunks": len(successful_chunks),
+            "failed_chunks": len(chunk_errors),
+            "errors": [f"{e['file_path']} (chunk {e['chunk_id'][:8]}): {e['error']}" for e in chunk_errors],
             "items_created": items_created,
             "evidences_merged": evidences_merged,
             "gaps_flagged": gaps_flagged,

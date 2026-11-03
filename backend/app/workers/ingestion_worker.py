@@ -221,24 +221,41 @@ class IngestionWorker:
                     project_id=job.project_id,
                 )
 
-                # Stage 4: Mark completed
+                # Stage 4: Determine final status
                 now = datetime.now(UTC)
-                job.status = IngestionJobStatus.COMPLETED
                 job.progress = 100
                 job.completed_at = now
-                job.error = None
                 job.metadata_info = {
                     **job.metadata_info,
                     "summary": all_stats,
                     "extraction": extraction_stats,
                     "indexing": indexing_stats,
                 }
+
+                skipped_reason = extraction_stats.get("skipped_reason")
+                extraction_errors = extraction_stats.get("errors", [])
+                failed_chunks = extraction_stats.get("failed_chunks", 0)
+
+                if skipped_reason == "GEMINI_API_KEY_NOT_CONFIGURED":
+                    job.status = IngestionJobStatus.FAILED
+                    job.error = "GEMINI_API_KEY is not configured. AI extraction and vector indexing could not run."
+                    logger.error("Job %s marked FAILED because GEMINI_API_KEY is not configured", job_id)
+                elif failed_chunks > 0:
+                    err_summary = "; ".join(extraction_errors[:3])
+                    if extraction_stats.get("extracted_chunks", 0) > 0 or extraction_stats.get("items_created", 0) > 0:
+                        job.status = IngestionJobStatus.COMPLETED_WITH_ERRORS
+                        job.error = f"Extraction completed with errors on {failed_chunks} chunk(s): {err_summary}"
+                        logger.warning("Job %s marked COMPLETED_WITH_ERRORS: %s", job_id, job.error)
+                    else:
+                        job.status = IngestionJobStatus.FAILED
+                        job.error = f"Extraction failed on all {failed_chunks} chunk(s): {err_summary}"
+                        logger.error("Job %s marked FAILED: %s", job_id, job.error)
+                else:
+                    job.status = IngestionJobStatus.COMPLETED
+                    job.error = None
+                    logger.info("Successfully completed ingestion job %s", job_id)
+
                 await session.commit()
-                logger.info(
-                    "Successfully completed ingestion job %s with indexing stats: %s",
-                    job_id,
-                    indexing_stats,
-                )
 
             except Exception as exc:
                 await session.rollback()

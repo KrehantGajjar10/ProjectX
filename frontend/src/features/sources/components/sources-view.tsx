@@ -7,14 +7,23 @@ import { Button } from "@/components/ui/button";
 import { SourceCard } from "@/features/sources/components/source-card";
 import { SourceUploadDialog } from "@/features/sources/components/source-upload-dialog";
 import { DeleteSourceDialog } from "@/features/sources/components/delete-source-dialog";
-import { fetchSourcesClient } from "@/features/sources/lib/sources-client";
+import { DeleteFileDialog } from "@/features/sources/components/delete-file-dialog";
+import {
+  fetchSourcesClient,
+  startIngestionJobClient,
+  getIngestionJobStatusClient,
+} from "@/features/sources/lib/sources-client";
 import {
   formatFileSize,
   type SourceRead,
   type UploadFileDetail,
+  type UploadSourceResponse,
 } from "@/features/sources/types/source";
+import type { IngestionJobRead } from "@/features/sources/types/ingestion";
 import type { ProjectDetailRead } from "@/types/project";
 import {
+  AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   FileCode,
@@ -22,6 +31,7 @@ import {
   Files,
   FolderPlus,
   HardDrive,
+  Loader2,
   RefreshCw,
   Search,
   Sparkles,
@@ -55,9 +65,48 @@ export function SourcesView({ project, initialSources }: SourcesViewProps) {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [uploadDialogOpen, setUploadDialogOpen] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
-  const [sourceToDelete, setSourceToDelete] = React.useState<SourceRead | null>(null);
+
+  // Whole Source Deletion Dialog state
+  const [sourceToDelete, setSourceToDelete] = React.useState<SourceRead | null>(
+    null
+  );
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
-  const [deleteSuccessNotice, setDeleteSuccessNotice] = React.useState<string | null>(null);
+  const [deleteSuccessNotice, setDeleteSuccessNotice] = React.useState<
+    string | null
+  >(null);
+
+  // Individual File Deletion Dialog state
+  const [fileToDelete, setFileToDelete] = React.useState<{
+    source: SourceRead;
+    file: UploadFileDetail;
+  } | null>(null);
+  const [isDeleteFileDialogOpen, setIsDeleteFileDialogOpen] =
+    React.useState(false);
+
+  // Active Ingestion State
+  const [activeIngestion, setActiveIngestion] = React.useState<{
+    sourceId: string;
+    sourceName: string;
+    job: IngestionJobRead;
+  } | null>(null);
+  const [ingestionFeedback, setIngestionFeedback] = React.useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [persistenceNotice, setPersistenceNotice] = React.useState<
+    string | null
+  >(null);
+
+  const ingestionPollRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  // Clean up timer on unmount
+  React.useEffect(() => {
+    return () => {
+      if (ingestionPollRef.current) {
+        clearInterval(ingestionPollRef.current);
+      }
+    };
+  }, []);
 
   // Compute stats across all sources
   const totalFiles = React.useMemo(() => {
@@ -80,21 +129,137 @@ export function SourcesView({ project, initialSources }: SourcesViewProps) {
       const refreshed = await fetchSourcesClient(project.id);
       setSources(refreshed);
       router.refresh();
+      return refreshed;
     } catch (err) {
       console.error("Failed to refresh sources:", err);
+      return null;
     } finally {
       setIsRefreshing(false);
     }
   }, [project.id, router]);
 
-  const handleUploadSuccess = () => {
-    // Treat backend as authoritative persisted state: fetch fresh sources list
-    refreshSources();
+  const handleUploadSuccess = async (response?: UploadSourceResponse) => {
+    // 1. Fetch the latest sources from the authoritative backend API
+    const refreshed = await refreshSources();
+
+    // 2. Check if the newly uploaded files were persisted in the backend database
+    if (response?.files && response.files.length > 0 && response.source) {
+      const targetSource = refreshed?.find((s) => s.id === response.source.id);
+      const persistedFiles = targetSource ? extractFilesFromSource(targetSource) : [];
+      const confirmedFilePaths = new Set(persistedFiles.map((f) => f.storage_path || f.filename));
+
+      const unpersistedFiles = response.files.filter(
+        (f) => !confirmedFilePaths.has(f.storage_path || f.filename)
+      );
+
+      if (unpersistedFiles.length > 0) {
+        // Backend physical storage has the files, but the JSONB column was not updated in PostgreSQL
+        setPersistenceNotice(
+          `Notice: ${response.files.length} document(s) uploaded to storage, but the backend database did not persist the updated file list to the source record (missing flag_modified in source_service.py). Uploaded files are reconciled below for your active session.`
+        );
+
+        // Reconcile in active session state so user sees all files
+        setSources((prev) => {
+          return prev.map((s) => {
+            if (s.id !== response.source.id) return s;
+            const existing = extractFilesFromSource(s);
+            const fileMap = new Map<string, UploadFileDetail>();
+            for (const f of existing) {
+              fileMap.set(f.storage_path || f.filename, f);
+            }
+            for (const f of response.files) {
+              fileMap.set(f.storage_path || f.filename, f);
+            }
+            return {
+              ...s,
+              config: {
+                ...(typeof s.config === "object" ? s.config : {}),
+                files: Array.from(fileMap.values()),
+              },
+            };
+          });
+        });
+      } else {
+        setPersistenceNotice(null);
+      }
+    }
+  };
+
+  const handleTriggerIngestion = async (source: SourceRead) => {
+    if (activeIngestion) return;
+
+    setIngestionFeedback(null);
+    try {
+      const job = await startIngestionJobClient(project.id, [source.id]);
+      setActiveIngestion({
+        sourceId: source.id,
+        sourceName: source.name,
+        job,
+      });
+
+      // Poll ingestion job status every 2 seconds
+      ingestionPollRef.current = setInterval(async () => {
+        try {
+          const currentJob = await getIngestionJobStatusClient(
+            project.id,
+            job.id
+          );
+          setActiveIngestion({
+            sourceId: source.id,
+            sourceName: source.name,
+            job: currentJob,
+          });
+
+          if (currentJob.status === "completed") {
+            if (ingestionPollRef.current) {
+              clearInterval(ingestionPollRef.current);
+              ingestionPollRef.current = null;
+            }
+            setActiveIngestion(null);
+            setIngestionFeedback({
+              type: "success",
+              message: `Ingestion completed for "${source.name}". Knowledge extracted and indexed successfully!`,
+            });
+            await refreshSources();
+          } else if (currentJob.status === "failed") {
+            if (ingestionPollRef.current) {
+              clearInterval(ingestionPollRef.current);
+              ingestionPollRef.current = null;
+            }
+            setActiveIngestion(null);
+            setIngestionFeedback({
+              type: "error",
+              message: `Ingestion failed: ${
+                currentJob.error || "Unknown extraction error."
+              }`,
+            });
+          }
+        } catch (pollErr) {
+          console.error("Error polling ingestion status:", pollErr);
+        }
+      }, 2000);
+    } catch (err) {
+      setIngestionFeedback({
+        type: "error",
+        message:
+          err instanceof Error
+            ? `Failed to start ingestion job: ${err.message}`
+            : "Failed to start ingestion job.",
+      });
+    }
   };
 
   const handleDeleteClick = (source: SourceRead) => {
     setSourceToDelete(source);
     setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteFileClick = (
+    source: SourceRead,
+    file: UploadFileDetail
+  ) => {
+    setFileToDelete({ source, file });
+    setIsDeleteFileDialogOpen(true);
   };
 
   const handleSourceDeleted = (sourceId: string) => {
@@ -180,6 +345,88 @@ export function SourcesView({ project, initialSources }: SourcesViewProps) {
           </Button>
         </div>
       </div>
+
+      {/* Active Ingestion Progress Banner */}
+      {activeIngestion && (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2.5 animate-in fade-in-50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+              <span className="text-xs font-semibold text-foreground">
+                Ingesting &ldquo;{activeIngestion.sourceName}&rdquo;
+              </span>
+            </div>
+            <span className="rounded bg-primary/15 px-2 py-0.5 text-[10px] font-mono font-medium text-primary uppercase">
+              {activeIngestion.job.status} ({activeIngestion.job.progress}%)
+            </span>
+          </div>
+
+          <div className="h-2 w-full overflow-hidden rounded-full bg-surface border border-border/60">
+            <div
+              className="h-full bg-primary transition-all duration-300"
+              style={{ width: `${Math.max(5, activeIngestion.job.progress)}%` }}
+            />
+          </div>
+
+          <div className="text-[11px] text-muted-foreground">
+            {activeIngestion.job.status === "queued"
+              ? "Job queued in database queue. Waiting for background worker to claim..."
+              : "Parsing source content, creating semantic chunks, and extracting grounded knowledge..."}
+          </div>
+        </div>
+      )}
+
+      {/* Ingestion Feedback Banner */}
+      {ingestionFeedback && (
+        <div
+          role="status"
+          className={`flex items-start justify-between rounded-xl border p-3.5 text-xs animate-in fade-in-50 ${
+            ingestionFeedback.type === "success"
+              ? "border-emerald/30 bg-emerald/10 text-emerald"
+              : "border-destructive/30 bg-destructive/10 text-destructive"
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            {ingestionFeedback.type === "success" ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            )}
+            <span className="leading-relaxed font-medium">
+              {ingestionFeedback.message}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIngestionFeedback(null)}
+            className="p-0.5 opacity-80 hover:opacity-100"
+            aria-label="Dismiss notice"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Persistence Notice Banner (Honest feedback if backend did not persist) */}
+      {persistenceNotice && (
+        <div
+          role="status"
+          className="flex items-start justify-between rounded-xl border border-copper/30 bg-copper/10 p-3.5 text-xs text-copper animate-in fade-in-50"
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span className="leading-relaxed">{persistenceNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPersistenceNotice(null)}
+            className="p-0.5 opacity-80 hover:opacity-100"
+            aria-label="Dismiss notice"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Deletion Feedback Banner */}
       {deleteSuccessNotice && (
@@ -334,6 +581,9 @@ export function SourcesView({ project, initialSources }: SourcesViewProps) {
                   source={source}
                   filterQuery={searchQuery}
                   onDeleteClick={handleDeleteClick}
+                  onDeleteFileClick={handleDeleteFileClick}
+                  onTriggerIngestion={handleTriggerIngestion}
+                  isIngesting={activeIngestion?.sourceId === source.id}
                 />
               ))}
             </div>
@@ -349,13 +599,25 @@ export function SourcesView({ project, initialSources }: SourcesViewProps) {
         onUploadSuccess={handleUploadSuccess}
       />
 
-      {/* Delete Source Dialog */}
+      {/* Whole Source Deletion Dialog */}
       <DeleteSourceDialog
         projectId={project.id}
         source={sourceToDelete}
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onDeleted={handleSourceDeleted}
+      />
+
+      {/* Individual File Deletion Dialog */}
+      <DeleteFileDialog
+        projectId={project.id}
+        source={fileToDelete?.source || null}
+        file={fileToDelete?.file || null}
+        isOpen={isDeleteFileDialogOpen}
+        onClose={() => {
+          setIsDeleteFileDialogOpen(false);
+          setFileToDelete(null);
+        }}
       />
     </div>
   );

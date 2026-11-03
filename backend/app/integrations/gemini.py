@@ -136,7 +136,9 @@ class GeminiClient:
                         )
                         raise
 
-                    backoff = (2**attempt) * 1.5 + random.uniform(0.1, 0.5)
+                    backoff = (2**attempt) * 2.0 + random.uniform(0.5, 1.5)
+                    if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
+                        backoff = max(backoff, 15.0 + (attempt * 10.0))
                     logger.warning(
                         "Gemini extraction attempt %d failed (%s). Retrying in %.2fs...",
                         attempt + 1,

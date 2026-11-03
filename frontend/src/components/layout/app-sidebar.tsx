@@ -84,9 +84,18 @@ export function AppSidebar({
         {
           label: "Knowledge",
           icon: Layers,
-          href: "#",
-          isActive: false,
-          isAvailable: false,
+          href: activeProjectId
+            ? `/app/projects/${activeProjectId}/knowledge`
+            : undefined,
+          onClick: !activeProjectId ? onOpenCreateProjectModal : undefined,
+          isActive: Boolean(
+            activeProjectId &&
+              (pathname === `/app/projects/${activeProjectId}/knowledge` ||
+                pathname.startsWith(
+                  `/app/projects/${activeProjectId}/knowledge/`
+                ))
+          ),
+          isAvailable: true,
         },
         {
           label: "Graph",

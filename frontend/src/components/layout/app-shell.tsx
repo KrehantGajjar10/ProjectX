@@ -32,7 +32,8 @@ export function AppShell({
     segments[0] === "app" &&
     segments[1] === "projects" &&
     segments[2] &&
-    segments[2] !== "sources"
+    segments[2] !== "sources" &&
+    segments[2] !== "knowledge"
       ? segments[2]
       : undefined;
 

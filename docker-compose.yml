@@ -54,6 +54,8 @@ services:
       QDRANT_PORT: 6333
       STORAGE_DIR: /app/data/storage
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
       DEMO_MODE: ${DEMO_MODE:-false}
       GITHUB_ACCESS_TOKEN: ${GITHUB_ACCESS_TOKEN:-}
     volumes:
@@ -88,6 +90,8 @@ services:
       QDRANT_PORT: 6333
       STORAGE_DIR: /app/data/storage
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
       DEMO_MODE: ${DEMO_MODE:-false}
       GITHUB_ACCESS_TOKEN: ${GITHUB_ACCESS_TOKEN:-}
     volumes:

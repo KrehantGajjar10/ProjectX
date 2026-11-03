@@ -3,6 +3,7 @@ import type {
   SourceRead,
   UploadSourceResponse,
 } from "@/features/sources/types/source";
+import type { IngestionJobRead } from "@/features/sources/types/ingestion";
 
 export async function fetchSourcesClient(
   projectId: string
@@ -79,4 +80,79 @@ export async function deleteSourceClient(
       data?.error?.message || "Failed to delete knowledge source.";
     throw new AuthClientError(errorMsg, data?.error?.code, res.status);
   }
+}
+
+export async function startIngestionJobClient(
+  projectId: string,
+  sourceIds?: string[]
+): Promise<IngestionJobRead> {
+  const res = await fetch(`/api/projects/${projectId}/ingestion/jobs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      source_ids: sourceIds && sourceIds.length > 0 ? sourceIds : null,
+    }),
+    cache: "no-store",
+  });
+
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok || !data?.success) {
+    const errorMsg =
+      data?.error?.message || "Failed to start ingestion job.";
+    throw new AuthClientError(errorMsg, data?.error?.code, res.status);
+  }
+
+  return data.job as IngestionJobRead;
+}
+
+export async function getIngestionJobStatusClient(
+  projectId: string,
+  jobId: string
+): Promise<IngestionJobRead> {
+  const res = await fetch(
+    `/api/projects/${projectId}/ingestion/jobs/${jobId}`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    }
+  );
+
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok || !data?.success) {
+    const errorMsg =
+      data?.error?.message || "Failed to retrieve ingestion job status.";
+    throw new AuthClientError(errorMsg, data?.error?.code, res.status);
+  }
+
+  return data.job as IngestionJobRead;
+}
+
+export async function listIngestionJobsClient(
+  projectId: string
+): Promise<IngestionJobRead[]> {
+  const res = await fetch(`/api/projects/${projectId}/ingestion/jobs`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+    cache: "no-store",
+  });
+
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok || !data?.success) {
+    const errorMsg =
+      data?.error?.message || "Failed to retrieve project ingestion jobs.";
+    throw new AuthClientError(errorMsg, data?.error?.code, res.status);
+  }
+
+  return (data.jobs || []) as IngestionJobRead[];
 }

@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.config import settings
 from app.core.exceptions import BadRequestError, NotFoundError
@@ -123,9 +124,10 @@ async def create_or_update_upload_source(
 
     if source:
         # Append files to existing source
-        existing_files = source.config.get("files", [])
+        existing_files = list(source.config.get("files", []))
         existing_files.extend(file_records)
         source.config = {"files": existing_files}
+        flag_modified(source, "config")
     else:
         source = Source(
             project_id=project_id,

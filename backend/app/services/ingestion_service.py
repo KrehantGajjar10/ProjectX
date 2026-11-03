@@ -84,6 +84,14 @@ class IngestionService:
                 metadata=item.metadata,
             )
 
+            # Check for zero extractable text warning
+            doc_warning = processed_doc.metadata.get("warning")
+            if doc_warning:
+                logger.warning("Document '%s': %s", item_path, doc_warning)
+                stats.setdefault("warnings", []).append(doc_warning)
+
+            doc_status = "warning" if doc_warning else "parsed"
+
             existing_doc = existing_docs.get(item_path)
 
             if existing_doc:
@@ -102,7 +110,7 @@ class IngestionService:
                 existing_doc.mime_type = processed_doc.mime_type
                 existing_doc.raw_content = processed_doc.raw_content
                 existing_doc.doc_metadata = processed_doc.metadata
-                existing_doc.status = "parsed"
+                existing_doc.status = doc_status
                 if job_id:
                     existing_doc.ingestion_job_id = job_id
 
@@ -133,7 +141,7 @@ class IngestionService:
                     mime_type=processed_doc.mime_type,
                     raw_content=processed_doc.raw_content,
                     doc_metadata=processed_doc.metadata,
-                    status="parsed",
+                    status=doc_status,
                 )
                 db.add(new_doc)
                 await db.flush()  # assign new_doc.id
